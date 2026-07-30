@@ -139,11 +139,31 @@
   .exercise-line{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;font-size:13px;color:var(--text-muted);}
   .footer-note{color:var(--text-muted);font-size:11px;text-align:center;margin-top:40px;}
   ::selection{background:var(--accent);color:var(--accent-ink);}
+  .streak-bar{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-top:14px;font-size:13px;font-weight:700;}
+  .streak-fire{font-size:16px;}
+  .streak-count{color:var(--accent);}
+  .chart-wrap{height:110px;padding:4px 16px 10px;}
+  .rest-row{display:flex;align-items:center;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
+  .rest-row input{width:48px;flex:0 0 auto;text-align:center;padding:10px 6px;}
+  .rest-display{font-variant-numeric:tabular-nums;font-weight:800;font-size:14px;min-width:50px;text-align:center;}
+  .stat-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 16px;margin-top:14px;}
+  .stat-row{display:flex;justify-content:space-between;gap:12px;}
+  .stat-value{font-size:22px;font-weight:800;margin-top:2px;}
+  .stat-change{margin-top:16px;font-size:15px;font-weight:800;}
+  .stat-change.up{color:var(--accent);}
+  .stat-change.down{color:var(--danger);}
+  .confetti-container{position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:hidden;}
+  .confetti-piece{position:absolute;top:-10px;width:8px;height:14px;opacity:0.9;animation:confetti-fall 1.2s ease-in forwards;}
+  @keyframes confetti-fall{
+    0%{transform:translateY(0) rotate(0deg);opacity:1;}
+    100%{transform:translateY(100vh) rotate(360deg);opacity:0;}
+  }
 </style>
 </head>
 <body id="app-body">
 <div id="app" class="wrap">Loading…</div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
 (function(){
   "use strict";
@@ -187,7 +207,20 @@
       addDayToStart: "Add a training day to get started.",
       changeSplit: "Change weekly split",
       changeSplitWarning: "Old logs stay saved, but exercises no longer in your split won't show up here.",
-      cancel: "Cancel"
+      cancel: "Cancel",
+      dayStreak: "day streak",
+      statsBtn: "Stats",
+      statsTitle: "Weekly Volume",
+      thisWeek: "This week",
+      lastWeek: "Last week",
+      vsLastWeek: "vs last week",
+      back: "Back",
+      restLabel: "Rest",
+      restMinUnit: "min",
+      restSecUnit: "sec",
+      restStart: "REST",
+      restRunning: "Resting…",
+      progressLabel: "Progress"
     },
     ar: {
       brand: "IbTheLifter",
@@ -215,7 +248,20 @@
       addDayToStart: "أضف يوم تمرين للبدء.",
       changeSplit: "تغيير التقسيم الأسبوعي",
       changeSplitWarning: "تبقى سجلاتك القديمة محفوظة، لكن التمارين التي لم تعد ضمن تقسيمك لن تظهر هنا.",
-      cancel: "إلغاء"
+      cancel: "إلغاء",
+      dayStreak: "أيام متتالية",
+      statsBtn: "الإحصائيات",
+      statsTitle: "الحجم الأسبوعي",
+      thisWeek: "هذا الأسبوع",
+      lastWeek: "الأسبوع الماضي",
+      vsLastWeek: "مقارنة بالأسبوع الماضي",
+      back: "رجوع",
+      restLabel: "الراحة",
+      restMinUnit: "دقيقة",
+      restSecUnit: "ثانية",
+      restStart: "ابدأ الراحة",
+      restRunning: "جارٍ الراحة…",
+      progressLabel: "التقدم"
     }
   };
 
@@ -232,6 +278,9 @@
     changingSplit: false,
     draft: {}
   };
+
+  var restTimers = {};
+  var chartInstances = {};
 
   function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
   function todayKey(){ return new Date().toISOString().slice(0,10); }
@@ -298,6 +347,187 @@
   }
   function volumeOf(sets){
     return sets.reduce(function(sum,s){ return sum + (Number(s.reps)||0) * (Number(s.weight)||0); }, 0);
+  }
+
+  function findExercise(exId){
+    var found = null;
+    (data.split.days || []).forEach(function(d){
+      var ex = d.exercises.find(function(e){ return e.id === exId; });
+      if (ex) found = ex;
+    });
+    return found;
+  }
+
+  function dayHasSets(dateKey){
+    var log = (data && data.logs) ? data.logs[dateKey] : null;
+    if (!log || !log.entries) return false;
+    return Object.keys(log.entries).some(function(exId){ return log.entries[exId] && log.entries[exId].length > 0; });
+  }
+
+  function computeStreak(){
+    if (!data) return 0;
+    var cursor = new Date(todayKey() + "T00:00:00Z");
+    if (!dayHasSets(todayKey())){
+      cursor.setUTCDate(cursor.getUTCDate() - 1);
+    }
+    var streak = 0;
+    while (true){
+      var key = cursor.toISOString().slice(0,10);
+      if (dayHasSets(key)){
+        streak++;
+        cursor.setUTCDate(cursor.getUTCDate() - 1);
+      } else {
+        break;
+      }
+    }
+    return streak;
+  }
+
+  function volumeInRange(startDate, endDate){
+    var total = 0;
+    var logs = (data && data.logs) || {};
+    Object.keys(logs).forEach(function(dateStr){
+      var d = new Date(dateStr + "T00:00:00");
+      if (d >= startDate && d <= endDate){
+        var entries = logs[dateStr].entries || {};
+        Object.keys(entries).forEach(function(exId){
+          total += volumeOf(entries[exId]);
+        });
+      }
+    });
+    return total;
+  }
+
+  function fireConfetti(){
+    var colors = ["#f2b705", "#eaeaec", "#e0524a"];
+    var container = document.createElement("div");
+    container.className = "confetti-container";
+    document.body.appendChild(container);
+    for (var i = 0; i < 28; i++){
+      var piece = document.createElement("div");
+      piece.className = "confetti-piece";
+      piece.style.left = (Math.random() * 100) + "%";
+      piece.style.background = colors[i % colors.length];
+      piece.style.animationDelay = (Math.random() * 0.25) + "s";
+      piece.style.transform = "rotate(" + (Math.random() * 360) + "deg)";
+      container.appendChild(piece);
+    }
+    setTimeout(function(){ container.remove(); }, 1500);
+  }
+
+  function playRestSound(){
+    try{
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      var ctx = new Ctx();
+      [0, 220].forEach(function(delay){
+        setTimeout(function(){
+          var o = ctx.createOscillator();
+          var g = ctx.createGain();
+          o.type = "sine";
+          o.frequency.value = 880;
+          g.gain.value = 0.18;
+          o.connect(g); g.connect(ctx.destination);
+          o.start();
+          o.stop(ctx.currentTime + 0.2);
+        }, delay);
+      });
+      setTimeout(function(){ ctx.close(); }, 600);
+    } catch(e){ /* no audio available */ }
+  }
+
+  function formatRestTime(s){
+    var m = Math.floor(s / 60), sec = s % 60;
+    return (m < 10 ? "0" : "") + m + ":" + (sec < 10 ? "0" : "") + sec;
+  }
+
+  function updateRestDisplay(exId, secs, running){
+    var el = document.getElementById("rest-display-" + exId);
+    if (el) el.textContent = formatRestTime(secs);
+    var btn = document.getElementById("rest-btn-" + exId);
+    if (btn) btn.disabled = !!running;
+  }
+
+  window.startRest = function(exId){
+    var ex = findExercise(exId);
+    if (!ex) return;
+    if (restTimers[exId]) clearInterval(restTimers[exId]);
+    var seconds = Math.max(5, parseInt(ex.restSeconds, 10) || 90);
+    var remaining = seconds;
+    updateRestDisplay(exId, remaining, true);
+    restTimers[exId] = setInterval(function(){
+      remaining--;
+      if (remaining <= 0){
+        clearInterval(restTimers[exId]);
+        delete restTimers[exId];
+        updateRestDisplay(exId, 0, false);
+        playRestSound();
+        return;
+      }
+      updateRestDisplay(exId, remaining, true);
+    }, 1000);
+  };
+
+  window.setRestSeconds = function(exId, value){
+    var next = JSON.parse(JSON.stringify(data));
+    var found = null;
+    next.split.days.forEach(function(d){
+      var ex = d.exercises.find(function(e){ return e.id === exId; });
+      if (ex) found = ex;
+    });
+    if (found) found.restSeconds = Math.max(5, parseInt(value, 10) || 90);
+    persist(next);
+  };
+
+  window.updateRestParts = function(exId){
+    var minEl = document.getElementById("rest-min-" + exId);
+    var secEl = document.getElementById("rest-sec-" + exId);
+    var mins = minEl && minEl.value !== "" ? (parseInt(minEl.value, 10) || 0) : 0;
+    var secs = secEl && secEl.value !== "" ? (parseInt(secEl.value, 10) || 0) : 0;
+    window.setRestSeconds(exId, mins * 60 + secs);
+  };
+
+  function renderCharts(){
+    Object.keys(chartInstances).forEach(function(exId){
+      if (chartInstances[exId]) chartInstances[exId].destroy();
+    });
+    chartInstances = {};
+    if (!data || !data.split || typeof Chart === "undefined") return;
+    data.split.days.forEach(function(day){
+      day.exercises.forEach(function(ex){
+        var canvas = document.getElementById("chart-" + ex.id);
+        if (!canvas) return;
+        var history = getHistory(ex.id).slice(0, 10).reverse();
+        if (!history.length) return;
+        var labels = history.map(function(h){ return fmtDate(h.date); });
+        var weights = history.map(function(h){
+          return Math.max.apply(null, h.sets.map(function(s){ return Number(s.weight) || 0; }));
+        });
+        chartInstances[ex.id] = new Chart(canvas.getContext("2d"), {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [{
+              data: weights,
+              borderColor: "#f2b705",
+              backgroundColor: "rgba(242,183,5,0.15)",
+              tension: 0.3,
+              fill: true,
+              pointRadius: 3,
+              pointBackgroundColor: "#f2b705"
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: true } },
+            scales: {
+              x: { ticks: { color: "#8b8d93", font: { size: 10 } }, grid: { color: "#2e3035" } },
+              y: { ticks: { color: "#8b8d93", font: { size: 10 } }, grid: { color: "#2e3035" }, beginAtZero: false }
+            }
+          }
+        });
+      });
+    });
   }
 
   window.choosePreset = function(key){
@@ -437,11 +667,18 @@
     }).map(function(r){
       return { reps: parseFloat(r.reps), weight: r.weight === "" ? 0 : parseFloat(r.weight) || 0 };
     });
-    var next = JSON.parse(JSON.stringify(data));
     var date = todayKey();
+    var history = getHistory(exId);
+    var pastVolumes = history.filter(function(h){ return h.date !== date; }).map(function(h){ return volumeOf(h.sets); });
+    var bestPastVolume = pastVolumes.length ? Math.max.apply(null, pastVolumes) : 0;
+    var newVolume = volumeOf(rows);
+    var isNewPR = newVolume > 0 && newVolume > bestPastVolume;
+
+    var next = JSON.parse(JSON.stringify(data));
     if (!next.logs[date]) next.logs[date] = { dayId: ui.activeDayId, entries: {} };
     next.logs[date].entries[exId] = rows;
     persist(next);
+    if (isNewPR) fireConfetti();
   };
   window.clearToday = function(exId){
     var next = JSON.parse(JSON.stringify(data));
@@ -451,6 +688,15 @@
     }
     ui.expandedEx = null;
     persist(next);
+  };
+
+  window.showStats = function(){
+    ui.stage = "stats";
+    render();
+  };
+  window.backToMain = function(){
+    ui.stage = "main";
+    render();
   };
 
   function langToggleHtml(){
@@ -470,8 +716,13 @@
       attachOnboardingFocusHandlers();
       return;
     }
+    if (ui.stage === "stats"){
+      app.innerHTML = renderStats();
+      return;
+    }
     app.innerHTML = renderMain();
     attachMainFocusHandlers();
+    renderCharts();
   }
 
   function renderOnboarding(){
@@ -563,9 +814,15 @@
     html += '<div class="top-actions">';
     html += langToggleHtml();
     html += '<button class="btn-ghost" onclick="toggleUnit()">' + esc(data.unit) + '</button>';
+    html += '<button class="btn-ghost" onclick="showStats()">' + T("statsBtn") + '</button>';
     html += '<button class="btn-ghost ' + (ui.editingSplit ? "active" : "") + '" onclick="toggleEditSplit()">' + (ui.editingSplit ? T("done") : T("editSplit")) + '</button>';
     html += '</div></div>';
     html += '<div class="sub" style="margin-top:6px;">' + fmtDate(todayKey()) + '</div>';
+
+    var streak = computeStreak();
+    if (streak > 0){
+      html += '<div class="streak-bar"><span class="streak-fire">🔥</span><span class="streak-count">' + streak + '</span> ' + T("dayStreak") + '</div>';
+    }
 
     html += '<div id="save-err" style="display:none;color:var(--danger);font-size:12px;margin-top:8px;">' + T("saveError") + '</div>';
 
@@ -606,6 +863,35 @@
     return html;
   }
 
+  function renderStats(){
+    var today = new Date(todayKey() + "T00:00:00");
+    var thisWeekStart = new Date(today); thisWeekStart.setDate(today.getDate() - 6);
+    var lastWeekEnd = new Date(thisWeekStart); lastWeekEnd.setDate(thisWeekStart.getDate() - 1);
+    var lastWeekStart = new Date(lastWeekEnd); lastWeekStart.setDate(lastWeekEnd.getDate() - 6);
+
+    var thisWeekVolume = volumeInRange(thisWeekStart, today);
+    var lastWeekVolume = volumeInRange(lastWeekStart, lastWeekEnd);
+    var pctChange = lastWeekVolume > 0
+      ? ((thisWeekVolume - lastWeekVolume) / lastWeekVolume * 100)
+      : (thisWeekVolume > 0 ? 100 : 0);
+    var isUp = pctChange >= 0;
+
+    var html = '<div class="header-row">' + brandHtml();
+    html += '<button class="btn-ghost" onclick="backToMain()">' + T("back") + '</button></div>';
+    html += '<div class="sub" style="margin-top:6px;">' + T("statsTitle") + '</div>';
+
+    html += '<div class="stat-card">';
+    html += '<div class="stat-row">';
+    html += '<div><div class="muted">' + T("thisWeek") + '</div><div class="stat-value">' + Math.round(thisWeekVolume).toLocaleString() + ' ' + esc(data.unit) + '</div></div>';
+    html += '<div><div class="muted">' + T("lastWeek") + '</div><div class="stat-value" style="color:var(--text-muted);">' + Math.round(lastWeekVolume).toLocaleString() + ' ' + esc(data.unit) + '</div></div>';
+    html += '</div>';
+    html += '<div class="stat-change ' + (isUp ? "up" : "down") + '">' + (isUp ? "▲" : "▼") + ' ' + Math.abs(pctChange).toFixed(1) + '% ' + T("vsLastWeek") + '</div>';
+    html += '</div>';
+
+    html += '<div class="footer-note">' + T("footer") + '</div>';
+    return html;
+  }
+
   function renderExerciseCard(ex){
     var history = getHistory(ex.id);
     var todayEntry = history.find(function(h){ return h.date === todayKey(); });
@@ -632,9 +918,27 @@
     }
     html += '</button>';
 
+    if (history.length > 0){
+      html += '<div class="chart-wrap"><canvas id="chart-' + ex.id + '"></canvas></div>';
+    }
+
     if (expanded){
       var draft = ui.draft[ex.id] || [];
+      var restSeconds = ex.restSeconds || 90;
+      var restMin = Math.floor(restSeconds / 60);
+      var restSecPart = restSeconds % 60;
       html += '<div class="card-body">';
+
+      html += '<div class="rest-row">';
+      html += '<label class="muted" style="flex:0 0 auto;">' + T("restLabel") + '</label>';
+      html += '<input type="number" min="0" max="59" id="rest-min-' + ex.id + '" value="' + restMin + '" onchange="updateRestParts(\'' + ex.id + '\')" />';
+      html += '<span class="muted">' + T("restMinUnit") + '</span>';
+      html += '<input type="number" min="0" max="59" id="rest-sec-' + ex.id + '" value="' + restSecPart + '" onchange="updateRestParts(\'' + ex.id + '\')" />';
+      html += '<span class="muted">' + T("restSecUnit") + '</span>';
+      html += '<button id="rest-btn-' + ex.id + '" class="btn-ghost" onclick="startRest(\'' + ex.id + '\')">' + T("restStart") + '</button>';
+      html += '<span id="rest-display-' + ex.id + '" class="rest-display">' + formatRestTime(restSeconds) + '</span>';
+      html += '</div>';
+
       html += '<div class="row" style="align-items:center;margin-bottom:12px;">';
       html += '<label class="muted" style="flex:0 0 auto;">' + T("setsLabel") + '</label>';
       html += '<input type="number" min="1" max="20" value="' + draft.length + '" style="width:70px;" onchange="setSetCount(\'' + ex.id + '\', this.value)" />';
