@@ -177,7 +177,19 @@
   // Absolute URL so the API works identically whether this page is loaded from
   // ib-the-lifter.vercel.app or from GitHub Pages (which has no backend of its own).
   var API_BASE = "https://ib-the-lifter.vercel.app";
+  // Some networks block/reset connections to *.vercel.app specifically. This is a tiny
+  // Cloudflare Worker that just relays requests to the same Vercel backend from
+  // Cloudflare's own network - used automatically if the primary request fails outright.
+  var API_FALLBACK_BASE = "https://ibthelifter-proxy-a91k7q.ibraheemqasem03.workers.dev";
   var app = document.getElementById("app");
+
+  async function apiFetch(path, options){
+    try {
+      return await fetch(API_BASE + path, options);
+    } catch(e){
+      return await fetch(API_FALLBACK_BASE + path, options);
+    }
+  }
 
   var PRESET_KEYS = ["pplSplit","upperLower","broSplit","fullBody"];
   var PRESETS = {
@@ -557,7 +569,7 @@
 
   async function fetchServerData(){
     try {
-      var res = await fetch(API_BASE + "/api/data", {
+      var res = await apiFetch("/api/data", {
         method: "GET",
         headers: { "Authorization": "Bearer " + authToken }
       });
@@ -569,7 +581,7 @@
 
   async function syncToServer(next){
     try {
-      var res = await fetch(API_BASE + "/api/data", {
+      var res = await apiFetch("/api/data", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + authToken },
         body: JSON.stringify({ data: next, etag: dataEtag })
@@ -759,7 +771,7 @@
 
     var endpoint = ui.authMode === "signup" ? "/api/signup" : "/api/login";
     try {
-      var res = await fetch(API_BASE + endpoint, {
+      var res = await apiFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifierType: identifierType, identifier: identifier, password: password })

@@ -1,0 +1,3 @@
+name = "ibthelifter-proxy-a91k7q"
+main = "worker.js"
+compatibility_date = "2026-07-31"
