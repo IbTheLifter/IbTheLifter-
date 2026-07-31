@@ -173,6 +173,10 @@
 
   var STORAGE_KEY = "ibthelifter-data";
   var LANG_KEY = "ibthelifter-lang";
+  var TOKEN_KEY = "ibthelifter-token";
+  // Absolute URL so the API works identically whether this page is loaded from
+  // ib-the-lifter.vercel.app or from GitHub Pages (which has no backend of its own).
+  var API_BASE = "https://ib-the-lifter.vercel.app";
   var app = document.getElementById("app");
 
   var PRESET_KEYS = ["pplSplit","upperLower","broSplit","fullBody"];
@@ -205,7 +209,7 @@
       noExercises: 'No exercises on this day yet. Tap "Edit split" to add some.',
       addExerciseTo: "Add exercise to",
       saveError: "Couldn't save — check your connection and try again.",
-      footer: "Data is stored in this browser. Host this file (e.g. Vercel, GitHub Pages) to use it anywhere and keep your data private to your device.",
+      footer: "Your data is saved to your account and synced across any device you log in on.",
       loading: "Loading…",
       addDayToStart: "Add a training day to get started.",
       changeSplit: "Change weekly split",
@@ -231,7 +235,29 @@
       wdWed: "Wed",
       wdThu: "Thu",
       wdFri: "Fri",
-      wdSat: "Sat"
+      wdSat: "Sat",
+      logInBtn: "Log In",
+      createAccountBtn: "Create Account",
+      emailTab: "Email",
+      phoneTab: "Phone Number",
+      emailPlaceholder: "Email address",
+      phonePlaceholder: "Phone number",
+      passwordPlaceholder: "Password",
+      countryLabel: "Country",
+      selectCountryPlaceholder: "Select country",
+      switchToSignup: "Don't have an account? Create one",
+      switchToLogin: "Already have an account? Log in",
+      errAccountExists: "An account with this email/phone already exists. Please log in.",
+      errNoAccount: "No account found with that email/phone. Try creating one.",
+      errWrongPassword: "Incorrect password.",
+      errGeneric: "Something went wrong. Please try again.",
+      errConflict: "Your data changed on another device. Refreshed — please redo your last entry if needed.",
+      errInvalidInput: "Please fill in all fields (password must be at least 6 characters).",
+      logoutBtn: "Log Out",
+      exportDataBtn: "Export my data (backup)",
+      existingDataNotice: "This device has existing workout data. Export a backup before creating a new account — new accounts start empty.",
+      authTagline: "Log in or create an account to sync your data across devices.",
+      syncing: "Syncing…"
     },
     ar: {
       brand: "IbTheLifter",
@@ -254,7 +280,7 @@
       noExercises: 'لا توجد تمارين في هذا اليوم بعد. اضغط "تعديل التقسيم" لإضافة تمارين.',
       addExerciseTo: "أضف تمرينًا إلى",
       saveError: "تعذر الحفظ — تحقق من اتصالك وحاول مرة أخرى.",
-      footer: "يتم حفظ بياناتك في هذا المتصفح. استضف هذا الملف (مثل Vercel أو GitHub Pages) لاستخدامه من أي مكان مع بقاء بياناتك خاصة بجهازك.",
+      footer: "يتم حفظ بياناتك في حسابك ومزامنتها عبر أي جهاز تسجّل الدخول منه.",
       loading: "جارٍ التحميل…",
       addDayToStart: "أضف يوم تمرين للبدء.",
       changeSplit: "تغيير التقسيم الأسبوعي",
@@ -280,7 +306,29 @@
       wdWed: "أربعاء",
       wdThu: "خميس",
       wdFri: "جمعة",
-      wdSat: "سبت"
+      wdSat: "سبت",
+      logInBtn: "تسجيل الدخول",
+      createAccountBtn: "إنشاء حساب",
+      emailTab: "البريد الإلكتروني",
+      phoneTab: "رقم الهاتف",
+      emailPlaceholder: "البريد الإلكتروني",
+      phonePlaceholder: "رقم الهاتف",
+      passwordPlaceholder: "كلمة المرور",
+      countryLabel: "الدولة",
+      selectCountryPlaceholder: "اختر الدولة",
+      switchToSignup: "ليس لديك حساب؟ أنشئ واحدًا",
+      switchToLogin: "لديك حساب بالفعل؟ سجّل الدخول",
+      errAccountExists: "يوجد حساب بهذا البريد/الرقم مسبقًا. الرجاء تسجيل الدخول.",
+      errNoAccount: "لم يتم العثور على حساب بهذا البريد/الرقم. جرّب إنشاء واحد.",
+      errWrongPassword: "كلمة المرور غير صحيحة.",
+      errGeneric: "حدث خطأ ما. الرجاء المحاولة مرة أخرى.",
+      errConflict: "تم تغيير بياناتك من جهاز آخر. تم التحديث — الرجاء إعادة إدخال آخر تعديل إذا لزم الأمر.",
+      errInvalidInput: "الرجاء تعبئة جميع الحقول (يجب ألا تقل كلمة المرور عن 6 أحرف).",
+      logoutBtn: "تسجيل الخروج",
+      exportDataBtn: "تصدير بياناتي (نسخة احتياطية)",
+      existingDataNotice: "يحتوي هذا الجهاز على بيانات تمرين موجودة. قم بتصدير نسخة احتياطية قبل إنشاء حساب جديد — الحسابات الجديدة تبدأ فارغة.",
+      authTagline: "سجّل الدخول أو أنشئ حسابًا لمزامنة بياناتك عبر الأجهزة.",
+      syncing: "جارٍ المزامنة…"
     }
   };
 
@@ -288,6 +336,8 @@
   function T(key){ return STR[lang][key]; }
 
   var data = null;
+  var authToken = null;
+  var dataEtag = null;
   var ui = {
     stage: "loading",
     obDays: [],
@@ -296,7 +346,11 @@
     editingSplit: false,
     changingSplit: false,
     draft: {},
-    restDays: []
+    restDays: [],
+    authMode: "login",
+    authIdentifierType: "email",
+    authError: null,
+    authBusy: false
   };
 
   var restTimers = {};
@@ -328,6 +382,49 @@
       ar: ["بلانك","كرانشز","رفع أرجل معلق","روسيان تويست","كيبل وود تشوب"]
     }
   };
+
+  // [ISO-3166 alpha-2, dial code, English fallback name] - used for the phone country picker.
+  // English fallback covers browsers/WebViews without Intl.DisplayNames support.
+  var COUNTRIES = [
+    ["SA","+966","Saudi Arabia"], ["AE","+971","United Arab Emirates"], ["EG","+20","Egypt"],
+    ["KW","+965","Kuwait"], ["QA","+974","Qatar"], ["BH","+973","Bahrain"], ["OM","+968","Oman"],
+    ["JO","+962","Jordan"], ["LB","+961","Lebanon"], ["IQ","+964","Iraq"], ["SY","+963","Syria"],
+    ["YE","+967","Yemen"], ["PS","+970","Palestine"], ["MA","+212","Morocco"], ["DZ","+213","Algeria"],
+    ["TN","+216","Tunisia"], ["LY","+218","Libya"], ["SD","+249","Sudan"],
+    ["US","+1","United States"], ["CA","+1","Canada"], ["GB","+44","United Kingdom"],
+    ["IE","+353","Ireland"], ["FR","+33","France"], ["DE","+49","Germany"], ["ES","+34","Spain"],
+    ["PT","+351","Portugal"], ["IT","+39","Italy"], ["NL","+31","Netherlands"], ["BE","+32","Belgium"],
+    ["CH","+41","Switzerland"], ["AT","+43","Austria"], ["SE","+46","Sweden"], ["NO","+47","Norway"],
+    ["DK","+45","Denmark"], ["FI","+358","Finland"], ["PL","+48","Poland"], ["GR","+30","Greece"],
+    ["TR","+90","Turkey"], ["RU","+7","Russia"], ["UA","+380","Ukraine"],
+    ["IN","+91","India"], ["PK","+92","Pakistan"], ["BD","+880","Bangladesh"], ["CN","+86","China"],
+    ["JP","+81","Japan"], ["KR","+82","South Korea"], ["ID","+62","Indonesia"], ["MY","+60","Malaysia"],
+    ["SG","+65","Singapore"], ["PH","+63","Philippines"], ["VN","+84","Vietnam"], ["TH","+66","Thailand"],
+    ["AU","+61","Australia"], ["NZ","+64","New Zealand"],
+    ["ZA","+27","South Africa"], ["NG","+234","Nigeria"], ["KE","+254","Kenya"], ["GH","+233","Ghana"],
+    ["BR","+55","Brazil"], ["MX","+52","Mexico"], ["AR","+54","Argentina"], ["CO","+57","Colombia"],
+    ["CL","+56","Chile"]
+  ];
+
+  function countryOptionsHtml(selectedIso){
+    var supportsDisplayNames = typeof Intl !== "undefined" && typeof Intl.DisplayNames === "function";
+    var names = null;
+    if (supportsDisplayNames){
+      try { names = new Intl.DisplayNames([lang === "ar" ? "ar" : "en"], { type: "region" }); }
+      catch(e){ names = null; }
+    }
+    return COUNTRIES.map(function(c){
+      var iso = c[0], code = c[1], fallbackName = c[2];
+      var label = "(" + code + ") ";
+      if (names){
+        try { label += names.of(iso) || fallbackName; }
+        catch(e){ label += fallbackName; }
+      } else {
+        label += fallbackName;
+      }
+      return '<option value="' + code + '" ' + (iso === selectedIso ? "selected" : "") + '>' + esc(label) + '</option>';
+    }).join("");
+  }
 
   function categoriesForDayName(name){
     var n = String(name || "");
@@ -439,7 +536,156 @@
       var err = document.getElementById("save-err");
       if (err) err.style.display = "block";
     }
+    if (authToken) syncToServer(next);
   }
+
+  async function fetchServerData(){
+    try {
+      var res = await fetch(API_BASE + "/api/data", {
+        method: "GET",
+        headers: { "Authorization": "Bearer " + authToken }
+      });
+      if (!res.ok) return null;
+      var body = await res.json();
+      return { data: body.data, etag: body.etag };
+    } catch(e){ return null; }
+  }
+
+  async function syncToServer(next){
+    try {
+      var res = await fetch(API_BASE + "/api/data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + authToken },
+        body: JSON.stringify({ data: next, etag: dataEtag })
+      });
+      if (res.status === 409){
+        var fresh = await fetchServerData();
+        if (fresh){
+          data = fresh.data;
+          dataEtag = fresh.etag;
+          storageSet(STORAGE_KEY, JSON.stringify(fresh.data));
+          ui.authError = T("errConflict");
+          render();
+        }
+        return;
+      }
+      if (res.ok){
+        var body = await res.json();
+        dataEtag = body.etag;
+      }
+    } catch(e){ /* offline: localStorage already has the update; next successful sync will catch up */ }
+  }
+
+  window.showAuthForm = function(mode){
+    ui.authMode = mode;
+    ui.authError = null;
+    ui.stage = "auth-form";
+    render();
+  };
+
+  window.cancelAuthForm = function(){
+    ui.stage = "auth-choice";
+    ui.authError = null;
+    render();
+  };
+
+  window.toggleAuthIdentifierType = function(type){
+    ui.authIdentifierType = type;
+    ui.authError = null;
+    render();
+  };
+
+  window.exportLocalData = function(){
+    var raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    var blob = new Blob([raw], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "ibthelifter-backup-" + todayKey() + ".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  window.logout = function(){
+    authToken = null;
+    dataEtag = null;
+    data = null;
+    try { localStorage.removeItem(TOKEN_KEY); } catch(e){}
+    ui.stage = "auth-choice";
+    ui.authError = null;
+    render();
+  };
+
+  window.submitAuth = async function(){
+    var emailInput = document.getElementById("auth-email");
+    var phoneCountry = document.getElementById("auth-phone-country");
+    var phoneNumber = document.getElementById("auth-phone-number");
+    var passwordInput = document.getElementById("auth-password");
+
+    var identifierType = ui.authIdentifierType;
+    var identifier;
+    if (identifierType === "email"){
+      identifier = emailInput ? emailInput.value.trim() : "";
+    } else {
+      var dial = phoneCountry ? phoneCountry.value : "";
+      var num = phoneNumber ? phoneNumber.value.trim() : "";
+      identifier = (dial && num) ? (dial + num) : "";
+    }
+    var password = passwordInput ? passwordInput.value : "";
+
+    if (!identifier || !password || password.length < 6){
+      ui.authError = T("errInvalidInput");
+      render();
+      return;
+    }
+
+    ui.authBusy = true;
+    ui.authError = null;
+    render();
+
+    var endpoint = ui.authMode === "signup" ? "/api/signup" : "/api/login";
+    try {
+      var res = await fetch(API_BASE + endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifierType: identifierType, identifier: identifier, password: password })
+      });
+      var body = await res.json().catch(function(){ return {}; });
+
+      if (!res.ok){
+        ui.authBusy = false;
+        if (body.error === "ACCOUNT_EXISTS") ui.authError = T("errAccountExists");
+        else if (body.error === "NO_ACCOUNT") ui.authError = T("errNoAccount");
+        else if (body.error === "WRONG_PASSWORD") ui.authError = T("errWrongPassword");
+        else if (body.error === "INVALID_INPUT") ui.authError = T("errInvalidInput");
+        else ui.authError = T("errGeneric");
+        render();
+        return;
+      }
+
+      authToken = body.token;
+      dataEtag = body.etag || null;
+      try { localStorage.setItem(TOKEN_KEY, authToken); } catch(e){}
+      ui.authBusy = false;
+      ui.authError = null;
+
+      var serverData = (body.data && body.data.split) ? body.data : null;
+      data = serverData;
+      if (data){
+        storageSet(STORAGE_KEY, JSON.stringify(data));
+        ui.activeDayId = data.split.days[0] ? data.split.days[0].id : null;
+      }
+      ui.stage = data ? "main" : "onboard-choose";
+      render();
+    } catch(e){
+      ui.authBusy = false;
+      ui.authError = T("errGeneric");
+      render();
+    }
+  };
 
   function applyDirection(){
     var html = document.getElementById("html-root");
@@ -732,6 +978,12 @@
     ui.stage = "main";
     render();
   };
+  window.cancelOnboarding = function(){
+    ui.obDays = [];
+    ui.restDays = [];
+    ui.stage = "onboard-choose";
+    render();
+  };
 
   window.toggleEditSplit = function(){
     ui.editingSplit = !ui.editingSplit;
@@ -859,6 +1111,11 @@
       app.innerHTML = '<div class="sub">' + T("loading") + '</div>';
       return;
     }
+    if (ui.stage === "auth-choice" || ui.stage === "auth-form"){
+      app.innerHTML = renderAuth();
+      attachAuthFocusHandlers();
+      return;
+    }
     if (!data || (ui.stage && ui.stage.indexOf("onboard") === 0)){
       app.innerHTML = renderOnboarding();
       attachOnboardingFocusHandlers();
@@ -871,6 +1128,66 @@
     app.innerHTML = renderMain();
     attachMainFocusHandlers();
     renderCharts();
+  }
+
+  function renderAuth(){
+    var html = '<div class="header-row">' + brandHtml() + langToggleHtml() + '</div>';
+    html += '<div class="sub" style="margin-top:10px;">' + T("authTagline") + '</div>';
+
+    if (ui.stage === "auth-choice"){
+      var hasLocalData = false;
+      try { var raw = localStorage.getItem(STORAGE_KEY); hasLocalData = !!(raw && raw !== "null"); } catch(e){}
+      html += '<div style="margin-top:24px;">';
+      html += '<button class="preset-btn" style="border-color:var(--accent);color:var(--accent);" onclick="showAuthForm(\'login\')">' + T("logInBtn") + '</button>';
+      html += '<button class="preset-btn" onclick="showAuthForm(\'signup\')">' + T("createAccountBtn") + '</button>';
+      html += '</div>';
+      if (hasLocalData){
+        html += '<div class="stat-card">';
+        html += '<div class="muted" style="margin-bottom:10px;">' + T("existingDataNotice") + '</div>';
+        html += '<button class="btn-ghost" style="width:100%;" onclick="exportLocalData()">' + T("exportDataBtn") + '</button>';
+        html += '</div>';
+      }
+      return html;
+    }
+
+    var isSignup = ui.authMode === "signup";
+    html += '<div class="sub" style="margin-top:6px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;">' + (isSignup ? T("createAccountBtn") : T("logInBtn")) + '</div>';
+
+    html += '<div class="row" style="margin-top:18px;">';
+    html += '<button class="btn-ghost ' + (ui.authIdentifierType === "email" ? "active" : "") + '" style="flex:1;" onclick="toggleAuthIdentifierType(\'email\')">' + T("emailTab") + '</button>';
+    html += '<button class="btn-ghost ' + (ui.authIdentifierType === "phone" ? "active" : "") + '" style="flex:1;" onclick="toggleAuthIdentifierType(\'phone\')">' + T("phoneTab") + '</button>';
+    html += '</div>';
+
+    html += '<div style="margin-top:14px;">';
+    if (ui.authIdentifierType === "email"){
+      html += '<input id="auth-email" type="email" placeholder="' + esc(T("emailPlaceholder")) + '" style="margin-bottom:10px;" autocomplete="username" />';
+    } else {
+      html += '<div class="row" style="margin-bottom:10px;">';
+      html += '<select id="auth-phone-country" style="flex:0 0 auto;max-width:150px;" dir="ltr">' + countryOptionsHtml("SA") + '</select>';
+      html += '<input id="auth-phone-number" type="tel" placeholder="' + esc(T("phonePlaceholder")) + '" dir="ltr" style="flex:1;" autocomplete="tel-national" />';
+      html += '</div>';
+    }
+    html += '<input id="auth-password" type="password" placeholder="' + esc(T("passwordPlaceholder")) + '" autocomplete="' + (isSignup ? "new-password" : "current-password") + '" />';
+    html += '</div>';
+
+    if (ui.authError){
+      html += '<div style="color:var(--danger);font-size:12px;margin-top:10px;">' + esc(ui.authError) + '</div>';
+    }
+
+    html += '<button class="btn-primary" style="width:100%;margin-top:16px;" ' + (ui.authBusy ? "disabled" : "") + ' onclick="submitAuth()">' + (ui.authBusy ? T("syncing") : (isSignup ? T("createAccountBtn") : T("logInBtn"))) + '</button>';
+    html += '<button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="showAuthForm(\'' + (isSignup ? "login" : "signup") + '\')">' + (isSignup ? T("switchToLogin") : T("switchToSignup")) + '</button>';
+    html += '<button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="cancelAuthForm()">' + T("cancel") + '</button>';
+
+    return html;
+  }
+
+  function attachAuthFocusHandlers(){
+    document.querySelectorAll("#app input").forEach(function(inp){
+      inp.addEventListener("keydown", function(e){
+        if (e.key === "Enter"){ e.preventDefault(); submitAuth(); }
+      });
+    });
+    enableScrollIntoViewOnFocus(app);
   }
 
   function renderOnboarding(){
@@ -907,9 +1224,7 @@
       if (ui.obDays.length > 0){
         html += '<button class="btn-primary" style="width:100%;margin-top:14px;" onclick="goToExercisesStep()">' + T("nextAddExercises") + '</button>';
       }
-      if (ui.changingSplit){
-        html += '<button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="cancelChangeSplit()">' + T("cancel") + '</button>';
-      }
+      html += '<button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="' + (ui.changingSplit ? "cancelChangeSplit()" : "cancelOnboarding()") + '">' + T("cancel") + '</button>';
       html += '</div>';
       return html;
     }
@@ -937,9 +1252,7 @@
       });
       var anyExercises = ui.obDays.some(function(d){ return d.exercises.length > 0; });
       html += '<button class="btn-primary" style="width:100%;" ' + (anyExercises ? "" : "disabled") + ' onclick="finishOnboarding()">' + (ui.changingSplit ? T("done") : T("startTracking")) + '</button>';
-      if (ui.changingSplit){
-        html += '<button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="cancelChangeSplit()">' + T("cancel") + '</button>';
-      }
+      html += '<button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="' + (ui.changingSplit ? "cancelChangeSplit()" : "cancelOnboarding()") + '">' + T("cancel") + '</button>';
       html += '</div>';
       return html;
     }
@@ -978,6 +1291,7 @@
     html += '<button class="btn-ghost" onclick="toggleUnit()">' + esc(data.unit) + '</button>';
     html += '<button class="btn-ghost" onclick="showStats()">' + T("statsBtn") + '</button>';
     html += '<button class="btn-ghost ' + (ui.editingSplit ? "active" : "") + '" onclick="toggleEditSplit()">' + (ui.editingSplit ? T("done") : T("editSplit")) + '</button>';
+    html += '<button class="btn-ghost" onclick="logout()">' + T("logoutBtn") + '</button>';
     html += '</div></div>';
     html += '<div class="sub" style="margin-top:6px;">' + fmtDate(todayKey()) + '</div>';
 
@@ -1156,14 +1470,28 @@
     if (storedLang === "en" || storedLang === "ar") lang = storedLang;
     applyDirection();
 
-    var stored = await storageGet(STORAGE_KEY);
-    if (stored){
-      try{
-        data = JSON.parse(stored);
-        ui.activeDayId = data.split && data.split.days && data.split.days[0] ? data.split.days[0].id : null;
-      }catch(e){ data = null; }
+    var storedToken = null;
+    try { storedToken = localStorage.getItem(TOKEN_KEY); } catch(e){}
+
+    if (storedToken){
+      authToken = storedToken;
+      var fresh = await fetchServerData();
+      if (fresh){
+        dataEtag = fresh.etag;
+        data = (fresh.data && fresh.data.split) ? fresh.data : null;
+        if (data){
+          storageSet(STORAGE_KEY, JSON.stringify(data));
+          ui.activeDayId = data.split.days[0] ? data.split.days[0].id : null;
+        }
+        ui.stage = data ? "main" : "onboard-choose";
+      } else {
+        authToken = null;
+        try { localStorage.removeItem(TOKEN_KEY); } catch(e){}
+        ui.stage = "auth-choice";
+      }
+    } else {
+      ui.stage = "auth-choice";
     }
-    ui.stage = data ? "main" : "onboard-choose";
     render();
   })();
 })();
