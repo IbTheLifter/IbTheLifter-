@@ -258,6 +258,12 @@
       existingDataNotice: "This device has existing workout data. Export a backup before creating a new account — new accounts start empty.",
       exportFallbackTitle: "Your backup data",
       exportFallbackHint: "Tap the box below, select all, and copy this text somewhere safe (like Notes or an email to yourself).",
+      importDataBtn: "Import backup",
+      importOrPasteLabel: "or paste it below",
+      importPastePlaceholder: "Paste your backup JSON here",
+      importBtn: "Import",
+      importError: "That doesn't look like a valid backup file. Please check and try again.",
+      importOverwriteWarning: "This will replace your current data. Continue?",
       authTagline: "Log in or create an account to sync your data across devices.",
       syncing: "Syncing…"
     },
@@ -331,6 +337,12 @@
       existingDataNotice: "يحتوي هذا الجهاز على بيانات تمرين موجودة. قم بتصدير نسخة احتياطية قبل إنشاء حساب جديد — الحسابات الجديدة تبدأ فارغة.",
       exportFallbackTitle: "نسخة بياناتك الاحتياطية",
       exportFallbackHint: "اضغط على المربع أدناه، وحدد الكل، وانسخ هذا النص إلى مكان آمن (مثل تطبيق الملاحظات أو بريد إلكتروني لنفسك).",
+      importDataBtn: "استيراد نسخة احتياطية",
+      importOrPasteLabel: "أو الصقها أدناه",
+      importPastePlaceholder: "الصق نص النسخة الاحتياطية هنا",
+      importBtn: "استيراد",
+      importError: "لا يبدو أن هذا ملف نسخة احتياطية صالح. يرجى التحقق والمحاولة مرة أخرى.",
+      importOverwriteWarning: "سيؤدي هذا إلى استبدال بياناتك الحالية. هل تريد المتابعة؟",
       authTagline: "سجّل الدخول أو أنشئ حسابًا لمزامنة بياناتك عبر الأجهزة.",
       syncing: "جارٍ المزامنة…"
     }
@@ -637,6 +649,75 @@
     }
 
     showExportTextFallback(raw);
+  };
+
+  function isValidBackupShape(parsed){
+    if (!parsed || typeof parsed !== "object") return false;
+    if (!parsed.split || typeof parsed.split !== "object" || !Array.isArray(parsed.split.days)) return false;
+    return parsed.split.days.every(function(d){
+      return d && typeof d.id === "string" && typeof d.name === "string" && Array.isArray(d.exercises) &&
+        d.exercises.every(function(e){ return e && typeof e.id === "string" && typeof e.name === "string"; });
+    });
+  }
+
+  window.showImportDialog = function(){
+    var overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;";
+    overlay.innerHTML =
+      '<div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;max-width:480px;width:100%;max-height:85vh;display:flex;flex-direction:column;gap:10px;overflow-y:auto;">' +
+        '<div style="font-weight:800;">' + esc(T("importDataBtn")) + '</div>' +
+        '<input type="file" id="import-file-input" accept="application/json,.json" />' +
+        '<div class="muted" style="font-size:11px;text-align:center;">' + esc(T("importOrPasteLabel")) + '</div>' +
+        '<textarea id="import-textarea" placeholder="' + esc(T("importPastePlaceholder")) + '" style="width:100%;height:160px;background:var(--surface-raised);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:12px;" dir="ltr"></textarea>' +
+        '<div id="import-error" style="color:var(--danger);font-size:12px;display:none;"></div>' +
+        '<button class="btn-primary" id="import-confirm-btn" style="width:100%;">' + esc(T("importBtn")) + '</button>' +
+        '<button class="btn-ghost" id="import-cancel-btn" style="width:100%;">' + esc(T("cancel")) + '</button>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    var fileInput = overlay.querySelector("#import-file-input");
+    var textarea = overlay.querySelector("#import-textarea");
+    var errEl = overlay.querySelector("#import-error");
+
+    fileInput.addEventListener("change", function(){
+      var file = fileInput.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(){ textarea.value = String(reader.result || ""); };
+      reader.readAsText(file);
+    });
+
+    overlay.querySelector("#import-cancel-btn").onclick = function(){ overlay.remove(); };
+
+    overlay.querySelector("#import-confirm-btn").onclick = function(){
+      var raw = textarea.value.trim();
+      var parsed;
+      try { parsed = JSON.parse(raw); }
+      catch(e){ errEl.textContent = T("importError"); errEl.style.display = "block"; return; }
+
+      if (!isValidBackupShape(parsed)){
+        errEl.textContent = T("importError");
+        errEl.style.display = "block";
+        return;
+      }
+
+      if (data && data.split && data.split.days && data.split.days.length){
+        if (!window.confirm(T("importOverwriteWarning"))) return;
+      }
+
+      var next = {
+        split: { days: parsed.split.days },
+        logs: (parsed.logs && typeof parsed.logs === "object") ? parsed.logs : {},
+        unit: (parsed.unit === "lb" ? "lb" : "kg"),
+        restDays: Array.isArray(parsed.restDays) ? parsed.restDays : []
+      };
+      ui.activeDayId = next.split.days[0] ? next.split.days[0].id : null;
+      ui.editingSplit = false;
+      ui.changingSplit = false;
+      ui.stage = "main";
+      overlay.remove();
+      persist(next);
+    };
   };
 
   window.logout = function(){
@@ -1234,6 +1315,9 @@
         html += '<button class="preset-btn" onclick="choosePreset(\'' + key + '\')">' + esc(lang === "ar" ? p.ar : p.en) + '</button>';
       });
       html += '<button class="preset-btn" style="border-color:var(--accent);color:var(--accent);" onclick="startCustom()">' + T("buildOwn") + '</button>';
+      if (!ui.changingSplit){
+        html += '<button class="preset-btn" onclick="showImportDialog()">' + T("importDataBtn") + '</button>';
+      }
       if (ui.changingSplit){
         html += '<button class="btn-ghost" style="width:100%;margin-top:6px;" onclick="cancelChangeSplit()">' + T("cancel") + '</button>';
       }
@@ -1321,6 +1405,7 @@
     html += '<button class="btn-ghost" onclick="toggleUnit()">' + esc(data.unit) + '</button>';
     html += '<button class="btn-ghost" onclick="showStats()">' + T("statsBtn") + '</button>';
     html += '<button class="btn-ghost ' + (ui.editingSplit ? "active" : "") + '" onclick="toggleEditSplit()">' + (ui.editingSplit ? T("done") : T("editSplit")) + '</button>';
+    html += '<button class="btn-ghost" onclick="showImportDialog()">' + T("importDataBtn") + '</button>';
     html += '<button class="btn-ghost" onclick="logout()">' + T("logoutBtn") + '</button>';
     html += '</div></div>';
     html += '<div class="sub" style="margin-top:6px;">' + fmtDate(todayKey()) + '</div>';
