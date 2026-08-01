@@ -556,6 +556,8 @@
     catch(e){ return false; }
   }
 
+  var syncChain = Promise.resolve();
+
   async function persist(next){
     data = next;
     var ok = await storageSet(STORAGE_KEY, JSON.stringify(next));
@@ -564,7 +566,15 @@
       var err = document.getElementById("save-err");
       if (err) err.style.display = "block";
     }
-    if (authToken) syncToServer(next);
+    // Chain syncs one at a time. Firing them concurrently (fire-and-forget per edit)
+    // let rapid successive edits race on the same stale dataEtag: the second request
+    // would 409 against the etag the first one just produced, and the conflict handler
+    // would then overwrite local data with the server's (only the first edit),
+    // silently discarding the second. Serializing means each sync always uses the
+    // etag the previous one just produced.
+    if (authToken){
+      syncChain = syncChain.then(function(){ return syncToServer(next); });
+    }
   }
 
   async function fetchServerData(){
