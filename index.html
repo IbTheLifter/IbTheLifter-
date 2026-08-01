@@ -577,12 +577,16 @@
     }
   }
 
+  // Distinguishes "the token is genuinely invalid/expired" (401 - real logout) from
+  // "couldn't reach the server this time" (network hiccup - must NOT log the user out
+  // or discard their data, just means we couldn't check for updates right now).
   async function fetchServerData(){
     try {
       var res = await apiFetch("/api/data", {
         method: "GET",
         headers: { "Authorization": "Bearer " + authToken }
       });
+      if (res.status === 401) return { unauthorized: true };
       if (!res.ok) return null;
       var body = await res.json();
       return { data: body.data, etag: body.etag };
@@ -982,7 +986,9 @@
       var ex = d.exercises.find(function(e){ return e.id === exId; });
       if (ex) found = ex;
     });
-    if (found) found.restSeconds = Math.max(5, parseInt(value, 10) || 90);
+    var parsed = parseInt(value, 10);
+    if (isNaN(parsed)) parsed = 90;
+    if (found) found.restSeconds = Math.max(5, parsed);
     persist(next);
   };
 
@@ -992,6 +998,19 @@
     var mins = minEl && minEl.value !== "" ? (parseInt(minEl.value, 10) || 0) : 0;
     var secs = secEl && secEl.value !== "" ? (parseInt(secEl.value, 10) || 0) : 0;
     window.setRestSeconds(exId, mins * 60 + secs);
+  };
+
+  // Committing on every keystroke (oninput) would re-render (and thus recreate) both
+  // the minutes and seconds boxes mid-edit, which is exactly what was corrupting values
+  // when moving from one box to the other. Debounce so the actual save only happens
+  // once the user pauses, using whatever both boxes hold at that point.
+  var restEditTimers = {};
+  window.scheduleRestUpdate = function(exId){
+    if (restEditTimers[exId]) clearTimeout(restEditTimers[exId]);
+    restEditTimers[exId] = setTimeout(function(){
+      delete restEditTimers[exId];
+      window.updateRestParts(exId);
+    }, 700);
   };
 
   function renderCharts(){
@@ -1162,16 +1181,17 @@
       return;
     }
     ui.expandedEx = exId;
+    var ex = findExercise(exId);
     var history = getHistory(exId);
     var today = history.find(function(h){ return h.date === todayKey(); });
-    var seed;
-    if (today){
-      seed = today.sets.map(function(s){ return { reps: String(s.reps), weight: String(s.weight) }; });
-    } else {
-      var last = history[0];
-      var count = last ? last.sets.length : 3;
-      seed = [];
-      for (var i=0;i<count;i++) seed.push({ reps:"", weight:"" });
+    var savedSets = today ? today.sets : [];
+    // ex.setCount (once the user has ever changed it) is the authoritative row count -
+    // otherwise fall back to how many sets exist already, or the old default of 3.
+    var count = (ex && ex.setCount) ? ex.setCount : (savedSets.length || (history[0] ? history[0].sets.length : 3));
+    var seed = [];
+    for (var i=0;i<count;i++){
+      var s = savedSets[i];
+      seed.push(s ? { reps: String(s.reps), weight: String(s.weight) } : { reps:"", weight:"" });
     }
     ui.draft[exId] = seed;
     render();
@@ -1185,11 +1205,34 @@
     }
     ui.draft[exId] = next;
     render();
+
+    // Persist the count itself so it's remembered even before any reps/weight are
+    // filled in - previously this only lived in memory and was lost (guessed back to
+    // a default of 3) the moment you navigated away and came back.
+    var nextData = JSON.parse(JSON.stringify(data));
+    var found = null;
+    nextData.split.days.forEach(function(d){
+      var e = d.exercises.find(function(e){ return e.id === exId; });
+      if (e) found = e;
+    });
+    if (found) found.setCount = n;
+    persist(nextData);
   };
+
+  var draftSaveTimers = {};
   window.updateDraft = function(exId, idx, field, value){
     ui.draft[exId][idx][field] = value;
+    // Auto-save (debounced) so typed reps/weight survive even if the user never
+    // presses "Save Sets" and just navigates away - matches every other input in
+    // the app now keeping whatever was actually typed.
+    if (draftSaveTimers[exId]) clearTimeout(draftSaveTimers[exId]);
+    draftSaveTimers[exId] = setTimeout(function(){
+      delete draftSaveTimers[exId];
+      commitDraft(exId);
+    }, 900);
   };
-  window.saveSets = function(exId){
+
+  function commitDraft(exId){
     var rows = (ui.draft[exId] || []).filter(function(r){
       return r.reps !== "" && r.reps !== null && !isNaN(parseFloat(r.reps));
     }).map(function(r){
@@ -1212,6 +1255,10 @@
     next.logs[date].entries[exId] = rows;
     persist(next);
     if (isNewPR) fireConfetti();
+  }
+  window.saveSets = function(exId){
+    if (draftSaveTimers[exId]){ clearTimeout(draftSaveTimers[exId]); delete draftSaveTimers[exId]; }
+    commitDraft(exId);
   };
   window.clearToday = function(exId){
     var next = JSON.parse(JSON.stringify(data));
@@ -1552,9 +1599,9 @@
 
       html += '<div class="rest-row">';
       html += '<label class="muted" style="flex:0 0 auto;">' + T("restLabel") + '</label>';
-      html += '<input type="number" min="0" max="59" id="rest-min-' + ex.id + '" value="' + restMin + '" onchange="updateRestParts(\'' + ex.id + '\')" />';
+      html += '<input type="number" min="0" max="59" id="rest-min-' + ex.id + '" value="' + restMin + '" oninput="scheduleRestUpdate(\'' + ex.id + '\')" />';
       html += '<span class="muted">' + T("restMinUnit") + '</span>';
-      html += '<input type="number" min="0" max="59" id="rest-sec-' + ex.id + '" value="' + restSecPart + '" onchange="updateRestParts(\'' + ex.id + '\')" />';
+      html += '<input type="number" min="0" max="59" id="rest-sec-' + ex.id + '" value="' + restSecPart + '" oninput="scheduleRestUpdate(\'' + ex.id + '\')" />';
       html += '<span class="muted">' + T("restSecUnit") + '</span>';
       html += '<button id="rest-btn-' + ex.id + '" class="btn-ghost" onclick="startRest(\'' + ex.id + '\')">' + T("restStart") + '</button>';
       html += '<span id="rest-display-' + ex.id + '" class="rest-display">' + formatRestTime(restSeconds) + '</span>';
@@ -1613,7 +1660,12 @@
     if (storedToken){
       authToken = storedToken;
       var fresh = await fetchServerData();
-      if (fresh){
+      if (fresh && fresh.unauthorized){
+        // The server explicitly rejected this token - genuinely logged out.
+        authToken = null;
+        try { localStorage.removeItem(TOKEN_KEY); } catch(e){}
+        ui.stage = "auth-choice";
+      } else if (fresh){
         dataEtag = fresh.etag;
         data = (fresh.data && fresh.data.split) ? fresh.data : null;
         if (data){
@@ -1622,9 +1674,17 @@
         }
         ui.stage = data ? "main" : "onboard-choose";
       } else {
-        authToken = null;
-        try { localStorage.removeItem(TOKEN_KEY); } catch(e){}
-        ui.stage = "auth-choice";
+        // Couldn't reach the server (network hiccup) - do NOT log out or wipe
+        // anything. Fall back to the last locally cached copy so the app still
+        // works, and keep the token so syncs can resume once the network is back.
+        var cachedRaw = await storageGet(STORAGE_KEY);
+        if (cachedRaw){
+          try {
+            data = JSON.parse(cachedRaw);
+            ui.activeDayId = data.split && data.split.days && data.split.days[0] ? data.split.days[0].id : null;
+          } catch(e){ data = null; }
+        }
+        ui.stage = data ? "main" : "onboard-choose";
       }
     } else {
       ui.stage = "auth-choice";
