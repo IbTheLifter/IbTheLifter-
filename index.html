@@ -186,11 +186,22 @@
   var API_FALLBACK_BASE = "https://ibthelifter-proxy-a91k7q.ibraheemqasem03.workers.dev";
   var app = document.getElementById("app");
 
+  // Some networks don't cleanly refuse the connection to vercel.app - they silently
+  // drop the packets, so fetch() never rejects and never resolves. Without a timeout
+  // that hangs forever and the fallback below never gets a chance to run. Force a
+  // hard cutoff so a blackholed primary request fails fast and falls back.
+  function fetchWithTimeout(url, options, ms){
+    var controller = new AbortController();
+    var timer = setTimeout(function(){ controller.abort(); }, ms);
+    var opts = Object.assign({}, options || {}, { signal: controller.signal });
+    return fetch(url, opts).finally(function(){ clearTimeout(timer); });
+  }
+
   async function apiFetch(path, options){
     try {
-      return await fetch(API_BASE + path, options);
+      return await fetchWithTimeout(API_BASE + path, options, 4000);
     } catch(e){
-      return await fetch(API_FALLBACK_BASE + path, options);
+      return await fetchWithTimeout(API_FALLBACK_BASE + path, options, 8000);
     }
   }
 
@@ -995,24 +1006,36 @@
     persist(next);
   };
 
-  window.updateRestParts = function(exId){
+  window.updateRestParts = function(exId, snapshot){
     var minEl = document.getElementById("rest-min-" + exId);
     var secEl = document.getElementById("rest-sec-" + exId);
-    var mins = minEl && minEl.value !== "" ? (parseInt(minEl.value, 10) || 0) : 0;
-    var secs = secEl && secEl.value !== "" ? (parseInt(secEl.value, 10) || 0) : 0;
+    var minRaw = snapshot ? snapshot.min : (minEl ? minEl.value : "");
+    var secRaw = snapshot ? snapshot.sec : (secEl ? secEl.value : "");
+    var mins = minRaw !== "" ? (parseInt(minRaw, 10) || 0) : 0;
+    var secs = secRaw !== "" ? (parseInt(secRaw, 10) || 0) : 0;
     window.setRestSeconds(exId, mins * 60 + secs);
   };
 
   // Committing on every keystroke (oninput) would re-render (and thus recreate) both
   // the minutes and seconds boxes mid-edit, which is exactly what was corrupting values
   // when moving from one box to the other. Debounce so the actual save only happens
-  // once the user pauses, using whatever both boxes hold at that point.
+  // once the user pauses.
+  //
+  // Reading the boxes' values from the DOM at the moment the debounce *fires* is
+  // unsafe: if the user collapses the exercise card (or navigates away) within the
+  // 700ms window, those inputs no longer exist by the time the timer runs, both read
+  // as empty, and the rest time silently gets committed as 0 - which floors to 5s.
+  // Instead, snapshot both boxes' live values right now, while they definitely still
+  // exist, and commit from that snapshot instead of re-querying the DOM later.
   var restEditTimers = {};
   window.scheduleRestUpdate = function(exId){
+    var minEl = document.getElementById("rest-min-" + exId);
+    var secEl = document.getElementById("rest-sec-" + exId);
+    var snapshot = { min: minEl ? minEl.value : "", sec: secEl ? secEl.value : "" };
     if (restEditTimers[exId]) clearTimeout(restEditTimers[exId]);
     restEditTimers[exId] = setTimeout(function(){
       delete restEditTimers[exId];
-      window.updateRestParts(exId);
+      window.updateRestParts(exId, snapshot);
     }, 700);
   };
 
