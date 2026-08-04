@@ -340,6 +340,7 @@
       aiAgentPlaceholder: "Ask a question…",
       aiAgentSend: "Send",
       aiAgentError: "Couldn't reach the AI agent. Check your connection and try again.",
+      aiAgentRateLimited: "The AI agent is busy right now (free usage limit). Please wait a moment and try again.",
       aiAgentThinking: "Thinking…"
     },
     ar: {
@@ -439,6 +440,7 @@
       aiAgentPlaceholder: "اكتب سؤالك…",
       aiAgentSend: "إرسال",
       aiAgentError: "تعذر الوصول إلى المساعد الذكي. تحقق من اتصالك وحاول مرة أخرى.",
+      aiAgentRateLimited: "المساعد الذكي مشغول حاليًا (تجاوزنا الحد المجاني المؤقت). الرجاء الانتظار قليلًا والمحاولة مرة أخرى.",
       aiAgentThinking: "جارٍ التفكير…"
     }
   };
@@ -1573,7 +1575,7 @@
       var body = await res.json().catch(function(){ return {}; });
       ui.aiBusy = false;
       if (!res.ok || !body.reply){
-        ui.aiError = T("aiAgentError");
+        ui.aiError = body.error === "RATE_LIMITED" ? T("aiAgentRateLimited") : T("aiAgentError");
         render();
         return;
       }
