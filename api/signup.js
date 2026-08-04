@@ -20,7 +20,14 @@ module.exports = async function handler(req, res) {
   var normalized = normalizeIdentifier(identifierType, identifier);
   var pathname = pathnameFor(normalized);
   var passwordHash = await bcrypt.hash(String(password), 10);
-  var record = { passwordHash: passwordHash, tokenVersion: 1, data: {}, createdAt: new Date().toISOString() };
+  var record = {
+    passwordHash: passwordHash,
+    tokenVersion: 1,
+    data: {},
+    createdAt: new Date().toISOString(),
+    identifierType: identifierType,
+    identifier: normalized
+  };
 
   var putResult;
   try {
@@ -31,5 +38,5 @@ module.exports = async function handler(req, res) {
   }
 
   var token = signToken({ sub: pathname, tv: 1 });
-  res.status(200).json({ token: token, data: {}, etag: putResult.etag });
+  res.status(200).json({ token: token, data: {}, etag: putResult.etag, identifierType: identifierType, identifier: normalized });
 };

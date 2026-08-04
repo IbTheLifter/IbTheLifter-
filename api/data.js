@@ -29,7 +29,12 @@ module.exports = async function handler(req, res) {
   if (found.record.tokenVersion !== payload.tv) { res.status(401).json({ error: "SESSION_REVOKED" }); return; }
 
   if (req.method === "GET") {
-    res.status(200).json({ data: found.record.data, etag: found.etag });
+    res.status(200).json({
+      data: found.record.data,
+      etag: found.etag,
+      identifierType: found.record.identifierType,
+      identifier: found.record.identifier
+    });
     return;
   }
 

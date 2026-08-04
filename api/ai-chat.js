@@ -1,8 +1,8 @@
 const { verifyToken, getTokenFromRequest } = require("../lib/auth");
 const { applyCors } = require("../lib/cors");
 
-var SYSTEM_PROMPT_EN = "You are the Gym AI Agent inside IbTheLifter, a workout tracking app. Answer questions about exercise form, programming, recovery, and general fitness with clear, practical, safe advice. Keep answers concise and actionable - a few short paragraphs or a short list, not an essay. If a question is about an injury or a medical condition beyond general guidance, recommend seeing a doctor or physical therapist rather than diagnosing.";
-var SYSTEM_PROMPT_AR = "أنت مساعد الجيم الذكي داخل تطبيق IbTheLifter لتتبع التمارين. أجب عن أسئلة أداء التمارين، البرمجة التدريبية، التعافي، واللياقة العامة بنصائح واضحة وعملية وآمنة. اجعل إجاباتك موجزة وقابلة للتنفيذ - بضع فقرات قصيرة أو قائمة مختصرة، وليس مقالًا طويلًا. إذا كان السؤال متعلقًا بإصابة أو حالة طبية تتجاوز الإرشادات العامة، انصح بمراجعة طبيب أو أخصائي علاج طبيعي بدلاً من التشخيص.";
+var SYSTEM_PROMPT_EN = "You are the Gym AI Agent inside IbTheLifter, a workout tracking app. Answer questions about exercise form, programming, recovery, and general fitness with clear, practical, safe advice. Keep answers SHORT: 2-4 sentences, or a bullet list of at most 5 short items - never both, never more than that unless the user explicitly asks for more detail. Plain text only: no markdown headers (#), no horizontal rules (---), no long multi-section structure. Bold (**word**) is fine for a key term. If a question is about an injury or a medical condition beyond general guidance, recommend seeing a doctor or physical therapist rather than diagnosing.";
+var SYSTEM_PROMPT_AR = "أنت مساعد الجيم الذكي داخل تطبيق IbTheLifter لتتبع التمارين. أجب عن أسئلة أداء التمارين، البرمجة التدريبية، التعافي، واللياقة العامة بنصائح واضحة وعملية وآمنة. اجعل إجاباتك قصيرة جدًا: من جملتين إلى أربع جمل، أو قائمة نقطية من 5 عناصر قصيرة كحد أقصى - وليس كليهما، ولا أطول من ذلك إلا إذا طلب المستخدم تفاصيل أكثر صراحةً. نص عادي فقط: بدون عناوين ماركداون (#)، وبدون خطوط فاصلة (---)، وبدون تركيب متعدد الأقسام. يمكن استخدام الخط العريض (**كلمة**) لكلمة مفتاحية واحدة. إذا كان السؤال متعلقًا بإصابة أو حالة طبية تتجاوز الإرشادات العامة، انصح بمراجعة طبيب أو أخصائي علاج طبيعي بدلاً من التشخيص.";
 
 // gemini-flash-latest is Google's rolling alias to their current free-tier flash
 // model - pinned version strings (gemini-2.0-flash-001, gemini-2.5-flash-lite, etc)
@@ -40,7 +40,12 @@ module.exports = async function handler(req, res) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: trimmed,
-          systemInstruction: { parts: [{ text: systemPrompt }] }
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          // gemini-flash-latest resolves to a Gemini 3.x model, which defaults to a
+          // "medium" internal reasoning pass before answering - several extra seconds
+          // of latency for zero benefit on short fitness Q&A. Minimal thinking cut a
+          // ~4s reply down to ~1.3s in testing with no noticeable quality loss.
+          generationConfig: { thinkingConfig: { thinkingLevel: "minimal" }, maxOutputTokens: 500 }
         })
       }
     );

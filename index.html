@@ -632,6 +632,18 @@
     });
   }
 
+  // Gemini replies use light markdown (**bold**, "* " bullets). We only ever want to
+  // render that as actual formatting for the AI's own messages, never raw asterisks -
+  // escape first (XSS-safe), then convert the small subset of markdown worth showing.
+  function formatAiText(s){
+    var escaped = esc(s);
+    escaped = escaped.replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>");
+    escaped = escaped.replace(/^#{1,6}[ \t]+(.*)$/gm, "<strong>$1</strong>");
+    escaped = escaped.replace(/^-{3,}[ \t]*$/gm, "");
+    escaped = escaped.replace(/^[*-][ \t]+/gm, "• ");
+    return escaped;
+  }
+
   function passwordFieldHtml(id, placeholder, autocomplete){
     return '<div class="pw-wrap">' +
       '<input id="' + id + '" type="password" placeholder="' + esc(placeholder) + '" autocomplete="' + autocomplete + '" />' +
@@ -696,6 +708,13 @@
       if (res.status === 401) return { unauthorized: true };
       if (!res.ok) return null;
       var body = await res.json();
+      // Self-heal: sessions that logged in before Personal Details existed (or that
+      // never re-logged-in since) have no cached identity locally. If the server has
+      // since learned it (backfilled on some login), adopt and cache it here too.
+      if (body.identifier && (!identity || identity.value !== body.identifier)){
+        identity = { type: body.identifierType, value: body.identifier };
+        try { localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity)); } catch(e){}
+      }
       return { data: body.data, etag: body.etag };
     } catch(e){ return null; }
   }
@@ -913,7 +932,9 @@
 
       authToken = body.token;
       dataEtag = body.etag || null;
-      identity = { type: identifierType, value: identifier };
+      // Prefer the server-normalized identifier (e.g. lowercased email) over the raw
+      // typed value, falling back to it only if an older API response omitted it.
+      identity = { type: body.identifierType || identifierType, value: body.identifier || identifier };
       try {
         localStorage.setItem(TOKEN_KEY, authToken);
         localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity));
@@ -1942,7 +1963,8 @@
       html += '<div class="chat-bubble ai">' + esc(T("aiAgentIntro")) + '</div>';
     }
     ui.aiMessages.forEach(function(m){
-      html += '<div class="chat-bubble ' + (m.role === "user" ? "user" : "ai") + '">' + esc(m.content) + '</div>';
+      var isUser = m.role === "user";
+      html += '<div class="chat-bubble ' + (isUser ? "user" : "ai") + '">' + (isUser ? esc(m.content) : formatAiText(m.content)) + '</div>';
     });
     if (ui.aiBusy){
       html += '<div class="chat-bubble ai">' + esc(T("aiAgentThinking")) + '</div>';
