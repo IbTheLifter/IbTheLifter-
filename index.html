@@ -226,11 +226,16 @@
     return fetch(url, opts).finally(function(){ clearTimeout(timer); });
   }
 
-  async function apiFetch(path, options){
+  // Most calls (login/data/etc) are fast, so a short timeout is what makes a
+  // blackholed connection fail over quickly. AI replies are genuinely variable -
+  // several seconds is normal, not a hang - so they need a much longer allowance
+  // or a perfectly healthy request gets aborted and misreported as a connection error.
+  async function apiFetch(path, options, timeouts){
+    var t = timeouts || { primary: 4000, fallback: 8000 };
     try {
-      return await fetchWithTimeout(API_BASE + path, options, 4000);
+      return await fetchWithTimeout(API_BASE + path, options, t.primary);
     } catch(e){
-      return await fetchWithTimeout(API_FALLBACK_BASE + path, options, 8000);
+      return await fetchWithTimeout(API_FALLBACK_BASE + path, options, t.fallback);
     }
   }
 
@@ -1592,7 +1597,7 @@
           messages: ui.aiMessages.map(function(m){ return { role: m.role, content: m.content }; }),
           lang: lang
         })
-      });
+      }, { primary: 20000, fallback: 20000 });
       var body = await res.json().catch(function(){ return {}; });
       ui.aiBusy = false;
       if (!res.ok || !body.reply){

@@ -8,5 +8,8 @@
       "source": "/index.html",
       "headers": [{ "key": "Cache-Control", "value": "no-cache, must-revalidate" }]
     }
-  ]
+  ],
+  "functions": {
+    "api/ai-chat.js": { "maxDuration": 25 }
+  }
 }
