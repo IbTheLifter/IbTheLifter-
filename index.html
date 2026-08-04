@@ -44,7 +44,7 @@
   }
   .sub{color:var(--text-muted);font-size:13px;margin-top:4px;}
   .row{display:flex;gap:8px;}
-  input[type="text"], input[type="number"]{
+  input[type="text"], input[type="number"], input[type="password"], input[type="email"], input[type="tel"]{
     background:var(--surface-raised);
     border:1px solid var(--line);
     color:var(--text);
@@ -55,6 +55,28 @@
     width:100%;
   }
   input:focus{border-color:var(--accent);}
+  .pw-wrap{position:relative;}
+  .pw-wrap input{width:100%;padding-inline-end:40px;}
+  .pw-eye{
+    position:absolute;inset-inline-end:2px;top:50%;transform:translateY(-50%);
+    background:none;border:none;cursor:pointer;font-size:16px;padding:8px;
+    color:var(--text-muted);line-height:1;
+  }
+  .personal-btn{
+    flex:1;background:var(--surface-raised);border:1px solid var(--line);
+    color:var(--text);border-radius:12px;padding:16px 10px;font-size:14px;font-weight:800;
+    text-align:center;
+  }
+  .ai-btn{
+    flex:1;background:var(--accent);color:var(--accent-ink);border:none;
+    border-radius:12px;padding:16px 10px;font-size:14px;font-weight:800;
+    text-align:center;
+  }
+  .chat-log{display:flex;flex-direction:column;gap:10px;margin-top:16px;margin-bottom:14px;max-height:55vh;overflow-y:auto;}
+  .chat-bubble{border-radius:12px;padding:10px 14px;font-size:14px;line-height:1.5;max-width:88%;white-space:pre-wrap;}
+  .chat-bubble.user{align-self:flex-end;background:var(--accent);color:var(--accent-ink);}
+  .chat-bubble.ai{align-self:flex-start;background:var(--surface-raised);border:1px solid var(--line);}
+  .chat-input-row{display:flex;gap:8px;position:sticky;bottom:0;background:var(--bg);padding-top:8px;}
   button{
     font-family:inherit;
     cursor:pointer;
@@ -183,6 +205,7 @@
   var STORAGE_KEY = "ibthelifter-data";
   var LANG_KEY = "ibthelifter-lang";
   var TOKEN_KEY = "ibthelifter-token";
+  var IDENTITY_KEY = "ibthelifter-identity";
   // Absolute URL so the API works identically whether this page is loaded from
   // ib-the-lifter.vercel.app or from GitHub Pages (which has no backend of its own).
   var API_BASE = "https://ib-the-lifter.vercel.app";
@@ -297,7 +320,27 @@
       importError: "That doesn't look like a valid backup file. Please check and try again.",
       importOverwriteWarning: "This will replace your current data. Continue?",
       authTagline: "Log in or create an account to sync your data across devices.",
-      syncing: "Syncing…"
+      syncing: "Syncing…",
+      personalDetailsBtn: "Personal Details",
+      loggedInAs: "Logged in as",
+      accountTypeEmail: "Email",
+      accountTypePhone: "Phone",
+      changePasswordBtn: "Change Password",
+      currentPasswordPlaceholder: "Current password",
+      newPasswordPlaceholder: "New password",
+      confirmNewPasswordPlaceholder: "Confirm new password",
+      savePasswordBtn: "Save New Password",
+      passwordChanged: "Password changed successfully.",
+      passwordMismatch: "New passwords don't match.",
+      wrongCurrentPassword: "Current password is incorrect.",
+      showPassword: "Show password",
+      hidePassword: "Hide password",
+      aiAgentBtn: "Gym AI Agent",
+      aiAgentIntro: "Ask me anything about training - exercise form, programming, recovery, whatever you need.",
+      aiAgentPlaceholder: "Ask a question…",
+      aiAgentSend: "Send",
+      aiAgentError: "Couldn't reach the AI agent. Check your connection and try again.",
+      aiAgentThinking: "Thinking…"
     },
     ar: {
       brand: "IbTheLifter",
@@ -376,7 +419,27 @@
       importError: "لا يبدو أن هذا ملف نسخة احتياطية صالح. يرجى التحقق والمحاولة مرة أخرى.",
       importOverwriteWarning: "سيؤدي هذا إلى استبدال بياناتك الحالية. هل تريد المتابعة؟",
       authTagline: "سجّل الدخول أو أنشئ حسابًا لمزامنة بياناتك عبر الأجهزة.",
-      syncing: "جارٍ المزامنة…"
+      syncing: "جارٍ المزامنة…",
+      personalDetailsBtn: "البيانات الشخصية",
+      loggedInAs: "مسجّل الدخول باسم",
+      accountTypeEmail: "البريد الإلكتروني",
+      accountTypePhone: "رقم الهاتف",
+      changePasswordBtn: "تغيير كلمة المرور",
+      currentPasswordPlaceholder: "كلمة المرور الحالية",
+      newPasswordPlaceholder: "كلمة المرور الجديدة",
+      confirmNewPasswordPlaceholder: "تأكيد كلمة المرور الجديدة",
+      savePasswordBtn: "حفظ كلمة المرور الجديدة",
+      passwordChanged: "تم تغيير كلمة المرور بنجاح.",
+      passwordMismatch: "كلمتا المرور الجديدتان غير متطابقتين.",
+      wrongCurrentPassword: "كلمة المرور الحالية غير صحيحة.",
+      showPassword: "إظهار كلمة المرور",
+      hidePassword: "إخفاء كلمة المرور",
+      aiAgentBtn: "مساعد الجيم الذكي",
+      aiAgentIntro: "اسألني أي شيء عن التمرين - أداء التمارين، البرنامج التدريبي، التعافي، أو أي شيء تحتاجه.",
+      aiAgentPlaceholder: "اكتب سؤالك…",
+      aiAgentSend: "إرسال",
+      aiAgentError: "تعذر الوصول إلى المساعد الذكي. تحقق من اتصالك وحاول مرة أخرى.",
+      aiAgentThinking: "جارٍ التفكير…"
     }
   };
 
@@ -398,8 +461,15 @@
     authMode: "login",
     authIdentifierType: "email",
     authError: null,
-    authBusy: false
+    authBusy: false,
+    pwError: null,
+    pwSuccess: false,
+    pwBusy: false,
+    aiMessages: [],
+    aiBusy: false,
+    aiError: null
   };
+  var identity = null; // { type: "email"|"phone", value: "..." } of the currently logged-in user
 
   var restTimers = {};
   var chartInstances = {};
@@ -559,6 +629,21 @@
       return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
     });
   }
+
+  function passwordFieldHtml(id, placeholder, autocomplete){
+    return '<div class="pw-wrap">' +
+      '<input id="' + id + '" type="password" placeholder="' + esc(placeholder) + '" autocomplete="' + autocomplete + '" />' +
+      '<button type="button" class="pw-eye" id="' + id + '-eye" onclick="togglePasswordVisibility(\'' + id + '\')">👁</button>' +
+    '</div>';
+  }
+  window.togglePasswordVisibility = function(id){
+    var el = document.getElementById(id);
+    var btn = document.getElementById(id + "-eye");
+    if (!el) return;
+    var showing = el.type === "text";
+    el.type = showing ? "password" : "text";
+    if (btn) btn.setAttribute("aria-label", showing ? T("showPassword") : T("hidePassword"));
+  };
 
   async function storageGet(key){
     if (window.storage && typeof window.storage.get === "function"){
@@ -770,7 +855,8 @@
     authToken = null;
     dataEtag = null;
     data = null;
-    try { localStorage.removeItem(TOKEN_KEY); } catch(e){}
+    identity = null;
+    try { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(IDENTITY_KEY); } catch(e){}
     ui.stage = "auth-choice";
     ui.authError = null;
     render();
@@ -825,7 +911,11 @@
 
       authToken = body.token;
       dataEtag = body.etag || null;
-      try { localStorage.setItem(TOKEN_KEY, authToken); } catch(e){}
+      identity = { type: identifierType, value: identifier };
+      try {
+        localStorage.setItem(TOKEN_KEY, authToken);
+        localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity));
+      } catch(e){}
       ui.authBusy = false;
       ui.authError = null;
 
@@ -1396,6 +1486,106 @@
     render();
   };
 
+  window.showPersonalDetails = function(){
+    ui.pwError = null;
+    ui.pwSuccess = false;
+    ui.stage = "personal-details";
+    render();
+  };
+
+  window.submitChangePassword = async function(){
+    var curEl = document.getElementById("pw-current");
+    var newEl = document.getElementById("pw-new");
+    var confirmEl = document.getElementById("pw-confirm");
+    var current = curEl ? curEl.value : "";
+    var next = newEl ? newEl.value : "";
+    var confirm = confirmEl ? confirmEl.value : "";
+
+    ui.pwSuccess = false;
+    if (!current || !next || next.length < 6){
+      ui.pwError = T("errInvalidInput");
+      render();
+      return;
+    }
+    if (next !== confirm){
+      ui.pwError = T("passwordMismatch");
+      render();
+      return;
+    }
+
+    ui.pwBusy = true;
+    ui.pwError = null;
+    render();
+
+    try {
+      var res = await apiFetch("/api/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + authToken },
+        body: JSON.stringify({ currentPassword: current, newPassword: next })
+      });
+      var body = await res.json().catch(function(){ return {}; });
+      ui.pwBusy = false;
+      if (!res.ok){
+        if (body.error === "WRONG_PASSWORD") ui.pwError = T("wrongCurrentPassword");
+        else if (body.error === "INVALID_INPUT") ui.pwError = T("errInvalidInput");
+        else ui.pwError = T("errGeneric");
+        render();
+        return;
+      }
+      // The server issues a fresh token (new tokenVersion) so this session stays
+      // logged in while any other logged-in device/session gets invalidated.
+      authToken = body.token;
+      try { localStorage.setItem(TOKEN_KEY, authToken); } catch(e){}
+      ui.pwSuccess = true;
+      render();
+    } catch(e){
+      ui.pwBusy = false;
+      ui.pwError = T("errGeneric");
+      render();
+    }
+  };
+
+  window.showAiAgent = function(){
+    ui.aiError = null;
+    ui.stage = "ai-agent";
+    render();
+  };
+
+  window.sendAiMessage = async function(){
+    var input = document.getElementById("ai-input");
+    var text = input ? input.value.trim() : "";
+    if (!text || ui.aiBusy) return;
+
+    ui.aiMessages.push({ role: "user", content: text });
+    ui.aiBusy = true;
+    ui.aiError = null;
+    render();
+
+    try {
+      var res = await apiFetch("/api/ai-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + authToken },
+        body: JSON.stringify({
+          messages: ui.aiMessages.map(function(m){ return { role: m.role, content: m.content }; }),
+          lang: lang
+        })
+      });
+      var body = await res.json().catch(function(){ return {}; });
+      ui.aiBusy = false;
+      if (!res.ok || !body.reply){
+        ui.aiError = T("aiAgentError");
+        render();
+        return;
+      }
+      ui.aiMessages.push({ role: "assistant", content: body.reply });
+      render();
+    } catch(e){
+      ui.aiBusy = false;
+      ui.aiError = T("aiAgentError");
+      render();
+    }
+  };
+
   function langToggleHtml(){
     return '<button class="btn-ghost" onclick="toggleLang()">' + (lang === "en" ? "AR / العربية" : "EN / English") + '</button>';
   }
@@ -1420,6 +1610,17 @@
     }
     if (ui.stage === "stats"){
       app.innerHTML = renderStats();
+      return;
+    }
+    if (ui.stage === "personal-details"){
+      app.innerHTML = renderPersonalDetails();
+      attachEnterToSubmit("submitChangePassword");
+      return;
+    }
+    if (ui.stage === "ai-agent"){
+      app.innerHTML = renderAiAgent();
+      attachEnterToSubmit("sendAiMessage");
+      scrollChatToBottom();
       return;
     }
     app.innerHTML = renderMain();
@@ -1464,7 +1665,7 @@
       html += '<input id="auth-phone-number" type="tel" placeholder="' + esc(T("phonePlaceholder")) + '" dir="ltr" style="flex:1;" autocomplete="tel-national" />';
       html += '</div>';
     }
-    html += '<input id="auth-password" type="password" placeholder="' + esc(T("passwordPlaceholder")) + '" autocomplete="' + (isSignup ? "new-password" : "current-password") + '" />';
+    html += passwordFieldHtml("auth-password", T("passwordPlaceholder"), isSignup ? "new-password" : "current-password");
     html += '</div>';
 
     if (ui.authError){
@@ -1485,6 +1686,20 @@
       });
     });
     enableScrollIntoViewOnFocus(app);
+  }
+
+  function attachEnterToSubmit(fnName){
+    document.querySelectorAll("#app input").forEach(function(inp){
+      inp.addEventListener("keydown", function(e){
+        if (e.key === "Enter"){ e.preventDefault(); window[fnName](); }
+      });
+    });
+    enableScrollIntoViewOnFocus(app);
+  }
+
+  function scrollChatToBottom(){
+    var log = document.getElementById("chat-log");
+    if (log) log.scrollTop = log.scrollHeight;
   }
 
   function renderOnboarding(){
@@ -1594,7 +1809,13 @@
     html += '<button class="btn-ghost" onclick="showImportDialog()">' + T("importDataBtn") + '</button>';
     html += '<button class="btn-ghost" onclick="logout()">' + T("logoutBtn") + '</button>';
     html += '</div></div>';
-    html += '<div class="sub" style="margin-top:6px;">' + fmtDate(todayKey()) + '</div>';
+
+    html += '<div class="row" style="margin-top:14px;">';
+    html += '<button class="personal-btn" onclick="showPersonalDetails()">' + T("personalDetailsBtn") + '</button>';
+    html += '<button class="ai-btn" onclick="showAiAgent()">' + T("aiAgentBtn") + '</button>';
+    html += '</div>';
+
+    html += '<div class="sub" style="margin-top:14px;">' + fmtDate(todayKey()) + '</div>';
 
     var streak = computeStreak();
     if (streak > 0){
@@ -1676,6 +1897,65 @@
     html += '</div>';
 
     html += '<div class="footer-note">' + T("footer") + '</div>';
+    return html;
+  }
+
+  function renderPersonalDetails(){
+    var html = '<div class="header-row">' + brandHtml();
+    html += '<button class="btn-ghost" onclick="backToMain()">' + T("back") + '</button></div>';
+    html += '<div class="sub" style="margin-top:6px;">' + T("personalDetailsBtn") + '</div>';
+
+    html += '<div class="stat-card">';
+    html += '<div class="muted">' + T("loggedInAs") + '</div>';
+    html += '<div style="font-size:16px;font-weight:700;margin-top:4px;word-break:break-all;">' + esc(identity ? identity.value : "") + '</div>';
+    html += '<div class="muted" style="margin-top:6px;">' + (identity && identity.type === "phone" ? T("accountTypePhone") : T("accountTypeEmail")) + '</div>';
+    html += '</div>';
+
+    html += '<div style="margin-top:20px;">';
+    html += '<div class="sub" style="font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;">' + T("changePasswordBtn") + '</div>';
+    html += '<div style="margin-bottom:10px;">' + passwordFieldHtml("pw-current", T("currentPasswordPlaceholder"), "current-password") + '</div>';
+    html += '<div style="margin-bottom:10px;">' + passwordFieldHtml("pw-new", T("newPasswordPlaceholder"), "new-password") + '</div>';
+    html += '<div style="margin-bottom:10px;">' + passwordFieldHtml("pw-confirm", T("confirmNewPasswordPlaceholder"), "new-password") + '</div>';
+
+    if (ui.pwError){
+      html += '<div style="color:var(--danger);font-size:12px;margin-bottom:10px;">' + esc(ui.pwError) + '</div>';
+    }
+    if (ui.pwSuccess){
+      html += '<div style="color:var(--accent);font-size:12px;margin-bottom:10px;">' + esc(T("passwordChanged")) + '</div>';
+    }
+    html += '<button class="btn-primary" style="width:100%;" ' + (ui.pwBusy ? "disabled" : "") + ' onclick="submitChangePassword()">' + (ui.pwBusy ? T("syncing") : T("savePasswordBtn")) + '</button>';
+    html += '</div>';
+
+    html += '<div class="footer-note">' + T("footer") + '</div>';
+    return html;
+  }
+
+  function renderAiAgent(){
+    var html = '<div class="header-row">' + brandHtml();
+    html += '<button class="btn-ghost" onclick="backToMain()">' + T("back") + '</button></div>';
+    html += '<div class="sub" style="margin-top:6px;">' + T("aiAgentBtn") + '</div>';
+
+    html += '<div class="chat-log" id="chat-log">';
+    if (ui.aiMessages.length === 0){
+      html += '<div class="chat-bubble ai">' + esc(T("aiAgentIntro")) + '</div>';
+    }
+    ui.aiMessages.forEach(function(m){
+      html += '<div class="chat-bubble ' + (m.role === "user" ? "user" : "ai") + '">' + esc(m.content) + '</div>';
+    });
+    if (ui.aiBusy){
+      html += '<div class="chat-bubble ai">' + esc(T("aiAgentThinking")) + '</div>';
+    }
+    html += '</div>';
+
+    if (ui.aiError){
+      html += '<div style="color:var(--danger);font-size:12px;margin-bottom:8px;">' + esc(ui.aiError) + '</div>';
+    }
+
+    html += '<div class="chat-input-row">';
+    html += '<input id="ai-input" type="text" style="flex:1;" placeholder="' + esc(T("aiAgentPlaceholder")) + '" ' + (ui.aiBusy ? "disabled" : "") + ' />';
+    html += '<button class="btn-primary" style="flex:0 0 auto;" ' + (ui.aiBusy ? "disabled" : "") + ' onclick="sendAiMessage()">' + T("aiAgentSend") + '</button>';
+    html += '</div>';
+
     return html;
   }
 
@@ -1774,7 +2054,11 @@
     applyDirection();
 
     var storedToken = null;
-    try { storedToken = localStorage.getItem(TOKEN_KEY); } catch(e){}
+    try {
+      storedToken = localStorage.getItem(TOKEN_KEY);
+      var storedIdentity = localStorage.getItem(IDENTITY_KEY);
+      if (storedIdentity) identity = JSON.parse(storedIdentity);
+    } catch(e){}
 
     if (storedToken){
       authToken = storedToken;
