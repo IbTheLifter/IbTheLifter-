@@ -67,16 +67,6 @@
     color:var(--text);border-radius:12px;padding:16px 10px;font-size:14px;font-weight:800;
     text-align:center;
   }
-  .ai-btn{
-    flex:1;background:var(--accent);color:var(--accent-ink);border:none;
-    border-radius:12px;padding:16px 10px;font-size:14px;font-weight:800;
-    text-align:center;
-  }
-  .chat-log{display:flex;flex-direction:column;gap:10px;margin-top:16px;margin-bottom:14px;max-height:55vh;overflow-y:auto;}
-  .chat-bubble{border-radius:12px;padding:10px 14px;font-size:14px;line-height:1.5;max-width:88%;white-space:pre-wrap;}
-  .chat-bubble.user{align-self:flex-end;background:var(--accent);color:var(--accent-ink);}
-  .chat-bubble.ai{align-self:flex-start;background:var(--surface-raised);border:1px solid var(--line);}
-  .chat-input-row{display:flex;gap:8px;position:sticky;bottom:0;background:var(--bg);padding-top:8px;}
   button{
     font-family:inherit;
     cursor:pointer;
@@ -226,16 +216,11 @@
     return fetch(url, opts).finally(function(){ clearTimeout(timer); });
   }
 
-  // Most calls (login/data/etc) are fast, so a short timeout is what makes a
-  // blackholed connection fail over quickly. AI replies are genuinely variable -
-  // several seconds is normal, not a hang - so they need a much longer allowance
-  // or a perfectly healthy request gets aborted and misreported as a connection error.
-  async function apiFetch(path, options, timeouts){
-    var t = timeouts || { primary: 4000, fallback: 8000 };
+  async function apiFetch(path, options){
     try {
-      return await fetchWithTimeout(API_BASE + path, options, t.primary);
+      return await fetchWithTimeout(API_BASE + path, options, 4000);
     } catch(e){
-      return await fetchWithTimeout(API_FALLBACK_BASE + path, options, t.fallback);
+      return await fetchWithTimeout(API_FALLBACK_BASE + path, options, 8000);
     }
   }
 
@@ -340,13 +325,6 @@
       wrongCurrentPassword: "Current password is incorrect.",
       showPassword: "Show password",
       hidePassword: "Hide password",
-      aiAgentBtn: "Gym AI Agent",
-      aiAgentIntro: "Ask me anything about training - exercise form, programming, recovery, whatever you need.",
-      aiAgentPlaceholder: "Ask a question…",
-      aiAgentSend: "Send",
-      aiAgentError: "Couldn't reach the AI agent. Check your connection and try again.",
-      aiAgentRateLimited: "The AI agent is busy right now (free usage limit). Please wait a moment and try again.",
-      aiAgentThinking: "Thinking…"
     },
     ar: {
       brand: "IbTheLifter",
@@ -440,13 +418,6 @@
       wrongCurrentPassword: "كلمة المرور الحالية غير صحيحة.",
       showPassword: "إظهار كلمة المرور",
       hidePassword: "إخفاء كلمة المرور",
-      aiAgentBtn: "مساعد الجيم الذكي",
-      aiAgentIntro: "اسألني أي شيء عن التمرين - أداء التمارين، البرنامج التدريبي، التعافي، أو أي شيء تحتاجه.",
-      aiAgentPlaceholder: "اكتب سؤالك…",
-      aiAgentSend: "إرسال",
-      aiAgentError: "تعذر الوصول إلى المساعد الذكي. تحقق من اتصالك وحاول مرة أخرى.",
-      aiAgentRateLimited: "المساعد الذكي مشغول حاليًا (تجاوزنا الحد المجاني المؤقت). الرجاء الانتظار قليلًا والمحاولة مرة أخرى.",
-      aiAgentThinking: "جارٍ التفكير…"
     }
   };
 
@@ -471,10 +442,7 @@
     authBusy: false,
     pwError: null,
     pwSuccess: false,
-    pwBusy: false,
-    aiMessages: [],
-    aiBusy: false,
-    aiError: null
+    pwBusy: false
   };
   var identity = null; // { type: "email"|"phone", value: "..." } of the currently logged-in user
 
@@ -635,18 +603,6 @@
     return String(s).replace(/[&<>"']/g, function(c){
       return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
     });
-  }
-
-  // Gemini replies use light markdown (**bold**, "* " bullets). We only ever want to
-  // render that as actual formatting for the AI's own messages, never raw asterisks -
-  // escape first (XSS-safe), then convert the small subset of markdown worth showing.
-  function formatAiText(s){
-    var escaped = esc(s);
-    escaped = escaped.replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>");
-    escaped = escaped.replace(/^#{1,6}[ \t]+(.*)$/gm, "<strong>$1</strong>");
-    escaped = escaped.replace(/^-{3,}[ \t]*$/gm, "");
-    escaped = escaped.replace(/^[*-][ \t]+/gm, "• ");
-    return escaped;
   }
 
   function passwordFieldHtml(id, placeholder, autocomplete){
@@ -1573,47 +1529,6 @@
     }
   };
 
-  window.showAiAgent = function(){
-    ui.aiError = null;
-    ui.stage = "ai-agent";
-    render();
-  };
-
-  window.sendAiMessage = async function(){
-    var input = document.getElementById("ai-input");
-    var text = input ? input.value.trim() : "";
-    if (!text || ui.aiBusy) return;
-
-    ui.aiMessages.push({ role: "user", content: text });
-    ui.aiBusy = true;
-    ui.aiError = null;
-    render();
-
-    try {
-      var res = await apiFetch("/api/ai-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + authToken },
-        body: JSON.stringify({
-          messages: ui.aiMessages.map(function(m){ return { role: m.role, content: m.content }; }),
-          lang: lang
-        })
-      }, { primary: 20000, fallback: 20000 });
-      var body = await res.json().catch(function(){ return {}; });
-      ui.aiBusy = false;
-      if (!res.ok || !body.reply){
-        ui.aiError = body.error === "RATE_LIMITED" ? T("aiAgentRateLimited") : T("aiAgentError");
-        render();
-        return;
-      }
-      ui.aiMessages.push({ role: "assistant", content: body.reply });
-      render();
-    } catch(e){
-      ui.aiBusy = false;
-      ui.aiError = T("aiAgentError");
-      render();
-    }
-  };
-
   function langToggleHtml(){
     return '<button class="btn-ghost" onclick="toggleLang()">' + (lang === "en" ? "AR / العربية" : "EN / English") + '</button>';
   }
@@ -1643,12 +1558,6 @@
     if (ui.stage === "personal-details"){
       app.innerHTML = renderPersonalDetails();
       attachEnterToSubmit("submitChangePassword");
-      return;
-    }
-    if (ui.stage === "ai-agent"){
-      app.innerHTML = renderAiAgent();
-      attachEnterToSubmit("sendAiMessage");
-      scrollChatToBottom();
       return;
     }
     app.innerHTML = renderMain();
@@ -1725,10 +1634,6 @@
     enableScrollIntoViewOnFocus(app);
   }
 
-  function scrollChatToBottom(){
-    var log = document.getElementById("chat-log");
-    if (log) log.scrollTop = log.scrollHeight;
-  }
 
   function renderOnboarding(){
     var html = '<div class="header-row">' + brandHtml() + langToggleHtml() + '</div>';
@@ -1840,7 +1745,6 @@
 
     html += '<div class="row" style="margin-top:14px;">';
     html += '<button class="personal-btn" onclick="showPersonalDetails()">' + T("personalDetailsBtn") + '</button>';
-    html += '<button class="ai-btn" onclick="showAiAgent()">' + T("aiAgentBtn") + '</button>';
     html += '</div>';
 
     html += '<div class="sub" style="margin-top:14px;">' + fmtDate(todayKey()) + '</div>';
@@ -1955,36 +1859,6 @@
     html += '</div>';
 
     html += '<div class="footer-note">' + T("footer") + '</div>';
-    return html;
-  }
-
-  function renderAiAgent(){
-    var html = '<div class="header-row">' + brandHtml();
-    html += '<button class="btn-ghost" onclick="backToMain()">' + T("back") + '</button></div>';
-    html += '<div class="sub" style="margin-top:6px;">' + T("aiAgentBtn") + '</div>';
-
-    html += '<div class="chat-log" id="chat-log">';
-    if (ui.aiMessages.length === 0){
-      html += '<div class="chat-bubble ai">' + esc(T("aiAgentIntro")) + '</div>';
-    }
-    ui.aiMessages.forEach(function(m){
-      var isUser = m.role === "user";
-      html += '<div class="chat-bubble ' + (isUser ? "user" : "ai") + '">' + (isUser ? esc(m.content) : formatAiText(m.content)) + '</div>';
-    });
-    if (ui.aiBusy){
-      html += '<div class="chat-bubble ai">' + esc(T("aiAgentThinking")) + '</div>';
-    }
-    html += '</div>';
-
-    if (ui.aiError){
-      html += '<div style="color:var(--danger);font-size:12px;margin-bottom:8px;">' + esc(ui.aiError) + '</div>';
-    }
-
-    html += '<div class="chat-input-row">';
-    html += '<input id="ai-input" type="text" style="flex:1;" placeholder="' + esc(T("aiAgentPlaceholder")) + '" ' + (ui.aiBusy ? "disabled" : "") + ' />';
-    html += '<button class="btn-primary" style="flex:0 0 auto;" ' + (ui.aiBusy ? "disabled" : "") + ' onclick="sendAiMessage()">' + T("aiAgentSend") + '</button>';
-    html += '</div>';
-
     return html;
   }
 
