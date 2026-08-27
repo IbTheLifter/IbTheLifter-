@@ -56,6 +56,7 @@ module.exports = async function handler(req, res) {
     data: found.record.data,
     etag: found.etag,
     identifierType: found.record.identifierType || identifierType,
-    identifier: found.record.identifier || normalized
+    identifier: found.record.identifier || normalized,
+    fullName: found.record.fullName || ""
   });
 };

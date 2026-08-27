@@ -11,6 +11,7 @@ module.exports = async function handler(req, res) {
   var identifierType = body.identifierType;
   var identifier = body.identifier;
   var password = body.password;
+  var fullName = body.fullName ? String(body.fullName).trim().replace(/\s+/g, " ") : "";
 
   if ((identifierType !== "email" && identifierType !== "phone") || !identifier || !password || String(password).length < 6) {
     res.status(400).json({ error: "INVALID_INPUT" });
@@ -26,7 +27,8 @@ module.exports = async function handler(req, res) {
     data: {},
     createdAt: new Date().toISOString(),
     identifierType: identifierType,
-    identifier: normalized
+    identifier: normalized,
+    fullName: fullName
   };
 
   var putResult;
@@ -38,5 +40,5 @@ module.exports = async function handler(req, res) {
   }
 
   var token = signToken({ sub: pathname, tv: 1 });
-  res.status(200).json({ token: token, data: {}, etag: putResult.etag, identifierType: identifierType, identifier: normalized });
+  res.status(200).json({ token: token, data: {}, etag: putResult.etag, identifierType: identifierType, identifier: normalized, fullName: fullName });
 };

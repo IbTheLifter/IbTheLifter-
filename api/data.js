@@ -1,5 +1,4 @@
-const { BlobPreconditionFailedError } = require("@vercel/blob");
-const { readRecord, updateRecord } = require("../lib/store");
+const { readRecord, updateRecord, BlobPreconditionFailedError } = require("../lib/store");
 const { verifyToken, getTokenFromRequest } = require("../lib/auth");
 const { applyCors } = require("../lib/cors");
 
@@ -33,7 +32,8 @@ module.exports = async function handler(req, res) {
       data: found.record.data,
       etag: found.etag,
       identifierType: found.record.identifierType,
-      identifier: found.record.identifier
+      identifier: found.record.identifier,
+      fullName: found.record.fullName || ""
     });
     return;
   }
