@@ -65,13 +65,12 @@
   .btn-unit-toggle {
     background: var(--surface-raised);
     border: 1px solid var(--line);
-    border-radius: 4px;
-    padding: 2px 6px;
-    font-size: 11px;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 13px;
     font-weight: bold;
     color: var(--text);
     cursor: pointer;
-    margin-left: 8px;
   }
   .personal-btn{
     flex:1;background:var(--surface-raised);border:1px solid var(--line);
@@ -1866,7 +1865,7 @@
     var html = '<div class="header-row">' + brandHtml();
     html += '<div class="top-actions">';
     html += langToggleHtml();
-    html += '<button class="btn-ghost" onclick="toggleUnit()">' + esc(data.unit) + '</button>';
+
     html += '<button class="btn-ghost" onclick="showStats()">' + T("statsBtn") + '</button>';
     html += '<button class="btn-ghost ' + (ui.editingSplit ? "active" : "") + '" onclick="toggleEditSplit()">' + (ui.editingSplit ? T("done") : T("editSplit")) + '</button>';
     html += '<button class="btn-ghost" onclick="showImportDialog()">' + T("importDataBtn") + '</button>';
@@ -2010,7 +2009,7 @@
 
     var html = '<div class="card">';
     html += '<button class="card-head" onclick="toggleExpand(\'' + ex.id + '\')">';
-    html += '<div class="card-head-top"><span>' + esc(ex.name) + '<button class="btn-unit-toggle" onclick="event.stopPropagation(); toggleExerciseUnit(\'' + ex.id + '\')">' + esc(getExerciseUnit(ex.id)) + '</button></span><span class="muted">' + (expanded ? "▲" : "▼") + '</span></div>';
+    html += '<div class="card-head-top"><span>' + esc(ex.name) + '</span><div style="display:flex; align-items:center; gap:8px;"><button class="btn-unit-toggle" onclick="event.stopPropagation(); toggleExerciseUnit(\'' + ex.id + '\')">' + esc(getExerciseUnit(ex.id)) + '</button><span class="muted">' + (expanded ? "▲" : "▼") + '</span></div></div>';
     if (lastSession){
       html += '<div class="muted">' + T("last") + ' ' + lastSession.sets.map(function(s){ return s.reps + '×' + s.weight + getExerciseUnit(ex.id); }).join(", ") + '</div>';
     }
