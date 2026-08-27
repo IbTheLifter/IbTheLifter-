@@ -129,7 +129,7 @@
     flex-direction:column;
     gap:6px;
   }
-  .card-head-top{display:flex;justify-content:space-between;align-items:center;font-weight:700;}
+  .card-head-top{display:flex;justify-content:space-between;align-items:center;font-weight:700;position:relative;}
   .muted{color:var(--text-muted);font-size:12px;}
   .card-body{padding:0 16px 16px;}
   .bar-track{height:6px;background:var(--line);border-radius:99px;overflow:hidden;}
@@ -2174,9 +2174,9 @@
     render();
   };
 
-  window.sendAdminComment = async function(userPathname, exId) {
+  window.sendAdminComment = async function(userPathname, exId, textOverride) {
     var input = document.getElementById("admin-comment-input-" + exId);
-    var text = input ? input.value : "";
+    var text = textOverride !== undefined ? textOverride : (input ? input.value : "");
     try {
       var res = await apiFetch("/api/admin", {
         method: "POST",
@@ -2193,7 +2193,7 @@
           if (!selectedUser.data.adminComments) selectedUser.data.adminComments = {};
           selectedUser.data.adminComments[exId] = { text: text, timestamp: new Date().toISOString() };
         }
-        alert("Comment sent successfully!");
+        alert(text === "" ? "Comment deleted successfully!" : "Comment sent successfully!");
         render();
       } else {
         alert("Failed to send comment.");
@@ -2274,7 +2274,7 @@
                 });
               }
               
-              var sets = entries[exId].sets || [];
+              var sets = Array.isArray(entries[exId]) ? entries[exId] : (entries[exId].sets || []);
               html += '<div style="margin-top: 8px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">';
               html += '<div style="font-weight: 600; color: var(--text);">' + esc(exName) + '</div>';
               
@@ -2297,7 +2297,12 @@
               var existingComment = (selUser.data.adminComments && selUser.data.adminComments[exId]) ? selUser.data.adminComments[exId].text : "";
               html += '<div style="margin-top: 10px; display:flex; flex-direction:column; gap: 6px;">';
               html += '<input type="text" id="admin-comment-input-' + exId + '" value="' + esc(existingComment) + '" placeholder="Leave a comment on this exercise..." style="width: 100%; padding: 6px; font-size: 13px;" />';
-              html += '<button class="btn-primary" style="align-self: flex-start; padding: 4px 10px; font-size: 12px;" onclick="sendAdminComment(\'' + selUser.pathname + '\', \'' + exId + '\')">Send Comment</button>';
+              html += '<div style="display:flex; align-items:center; gap:8px;">';
+              html += '<button class="btn-primary" style="padding: 4px 10px; font-size: 12px;" onclick="sendAdminComment(\'' + selUser.pathname + '\', \'' + exId + '\')">Send Comment</button>';
+              if (existingComment && existingComment.trim()) {
+                html += '<button class="btn-ghost" style="padding: 4px 10px; font-size: 12px; color: var(--accent);" onclick="sendAdminComment(\'' + selUser.pathname + '\', \'' + exId + '\', \'\')">Delete Comment</button>';
+              }
+              html += '</div>';
               html += '</div>';
 
               html += '</div>';
