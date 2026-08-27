@@ -155,6 +155,19 @@
   .set-num{width:22px;color:var(--text-muted);font-size:12px;text-align:center;flex:0 0 auto;}
   .top-actions{display:flex;gap:8px;align-items:center;}
   .header-row{display:flex;justify-content:space-between;align-items:flex-start;}
+  @media (max-width: 680px) {
+    .header-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .top-actions {
+      flex-wrap: wrap;
+      width: 100%;
+      gap: 6px;
+    }
+  }
   .empty{color:var(--text-muted);font-size:13px;text-align:center;padding:32px 0;}
   .list-item{
     display:flex;justify-content:space-between;align-items:center;
