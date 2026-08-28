@@ -1054,7 +1054,7 @@
         storageSet(STORAGE_KEY, JSON.stringify(data));
         ui.activeDayId = data.split.days[0] ? data.split.days[0].id : null;
       }
-      ui.stage = data ? "main" : "onboard-choose";
+      ui.stage = (data && data.split && data.split.days) ? "main" : "onboard-choose";
       render();
     } catch(e){
       ui.authBusy = false;
@@ -1788,7 +1788,7 @@
       avatars.forEach(function(av) {
         var isSel = ui.selectedAvatar === av.id;
         html += '<div onclick="selectSignupAvatar(\'' + av.id + '\')" style="cursor: pointer; border: 2px solid ' + (isSel ? 'var(--accent)' : 'var(--line)') + '; border-radius: 8px; padding: 8px; text-align: center; background: var(--surface-raised);">';
-        html += '<div style="width: 32px; height: 32px; border-radius: 50%; background: ' + av.color + '; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: bold; font-size: 12px;">' + av.label[0] + '</div>';
+        html += '<div style="width: 36px; height: 36px; border-radius: 50%; overflow: hidden; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;">' + renderAvatarSvg(av.id, av.color) + '</div>';
         html += '<div style="font-size: 11px; font-weight: bold; color: var(--text);">' + av.label.split(" ")[0] + '</div>';
         html += '</div>';
       });
@@ -2075,7 +2075,7 @@
     avatars.forEach(function(av) {
       var isSel = selectedAv === av.id;
       html += '<div onclick="selectProfileAvatar(\'' + av.id + '\')" style="cursor: pointer; border: 2px solid ' + (isSel ? 'var(--accent)' : 'var(--line)') + '; border-radius: 8px; padding: 8px; text-align: center; background: var(--surface-raised);">';
-      html += '<div style="width: 32px; height: 32px; border-radius: 50%; background: ' + av.color + '; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: bold; font-size: 12px;">' + av.label[0] + '</div>';
+      html += '<div style="width: 36px; height: 36px; border-radius: 50%; overflow: hidden; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;">' + renderAvatarSvg(av.id, av.color) + '</div>';
       html += '<div style="font-size: 11px; font-weight: bold; color: var(--text);">' + av.label.split(" ")[0] + '</div>';
       html += '</div>';
     });
@@ -2234,7 +2234,7 @@
           storageSet(STORAGE_KEY, JSON.stringify(data));
           ui.activeDayId = data.split.days[0] ? data.split.days[0].id : null;
         }
-        ui.stage = data ? "main" : "onboard-choose";
+        ui.stage = (data && data.split && data.split.days) ? "main" : "onboard-choose";
       } else {
         // Couldn't reach the server (network hiccup) - do NOT log out or wipe
         // anything. Fall back to the last locally cached copy so the app still
@@ -2246,7 +2246,7 @@
             ui.activeDayId = data.split && data.split.days && data.split.days[0] ? data.split.days[0].id : null;
           } catch(e){ data = null; }
         }
-        ui.stage = data ? "main" : "onboard-choose";
+        ui.stage = (data && data.split && data.split.days) ? "main" : "onboard-choose";
       }
     } else {
       ui.stage = "auth-choice";
