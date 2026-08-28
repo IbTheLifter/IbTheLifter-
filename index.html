@@ -307,6 +307,247 @@
     return svg;
   }
 
+  function selectProfileAvatar(id) {
+    ui.tempProfileAvatar = id;
+    render();
+  }
+  window.selectProfileAvatar = selectProfileAvatar;
+
+  async function submitProfileUpdate() {
+    var nameInput = document.getElementById("profile-fullname");
+    var nextName = nameInput ? nameInput.value.trim().replace(/\s+/g, " ") : "";
+    var nextAvatar = ui.tempProfileAvatar || (data && data.avatar) || "chest";
+
+    if (!nextName) {
+      ui.profileError = "Name cannot be empty.";
+      render();
+      return;
+    }
+
+    ui.profileBusy = true;
+    ui.profileError = null;
+    ui.profileSuccess = false;
+    render();
+
+    try {
+      data = data || {};
+      data.avatar = nextAvatar;
+      persist(data);
+
+      var res = await apiFetch("/api/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + authToken },
+        body: JSON.stringify({ fullName: nextName })
+      });
+
+      if (res.ok) {
+        displayName = nextName;
+        try { localStorage.setItem(DISPLAY_NAME_KEY, displayName); } catch(e){}
+        ui.profileSuccess = true;
+      } else {
+        ui.profileError = "Failed to update profile name on server.";
+      }
+    } catch(e) {
+      ui.profileError = "Connection error.";
+    }
+
+    ui.profileBusy = false;
+    render();
+  }
+  window.submitProfileUpdate = submitProfileUpdate;
+
+  function selectSignupAvatar(id) {
+    ui.selectedAvatar = id;
+    render();
+  }
+  window.selectSignupAvatar = selectSignupAvatar;
+
+  function getExerciseUnit(exId) {
+    if (!data || !data.exerciseUnits) {
+      if (data) data.exerciseUnits = {};
+      else return "kg";
+    }
+    return data.exerciseUnits[exId] || data.unit || "kg";
+  }
+  window.getExerciseUnit = getExerciseUnit;
+
+  function toggleExerciseUnit(exId) {
+    if (!data) return;
+    if (!data.exerciseUnits) data.exerciseUnits = {};
+    var current = getExerciseUnit(exId);
+    data.exerciseUnits[exId] = current === "kg" ? "lbs" : "kg";
+    persist(data);
+  }
+  window.toggleExerciseUnit = toggleExerciseUnit;
+
+  async function showAdminPanel() {
+    ui.stage = "admin";
+    ui.adminLoading = true;
+    ui.adminUsers = [];
+    ui.adminSelectedUser = null;
+    render();
+    try {
+      var res = await apiFetch("/api/admin", {
+        headers: { "Authorization": "Bearer " + authToken }
+      });
+      if (res.ok) {
+        var body = await res.json();
+        ui.adminUsers = body.users || [];
+      }
+    } catch(e) {}
+    ui.adminLoading = false;
+    render();
+  }
+  window.showAdminPanel = showAdminPanel;
+
+  function selectAdminUser(userPathname) {
+    var user = ui.adminUsers.find(function(u){ return u.pathname === userPathname; });
+    ui.adminSelectedUser = user || null;
+    render();
+  }
+  window.selectAdminUser = selectAdminUser;
+
+  async function sendAdminComment(userPathname, exId, textOverride) {
+    var input = document.getElementById("admin-comment-input-" + exId);
+    var text = textOverride !== undefined ? textOverride : (input ? input.value : "");
+    try {
+      var res = await apiFetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + authToken },
+        body: JSON.stringify({
+          userPathname: userPathname,
+          exerciseId: exId,
+          commentText: text
+        })
+      });
+      if (res.ok) {
+        var selectedUser = ui.adminUsers.find(function(u){ return u.pathname === userPathname; });
+        if (selectedUser) {
+          if (!selectedUser.data.adminComments) selectedUser.data.adminComments = {};
+          selectedUser.data.adminComments[exId] = { text: text, timestamp: new Date().toISOString() };
+        }
+        alert(text === "" ? "Comment deleted successfully!" : "Comment sent successfully!");
+        render();
+      } else {
+        alert("Failed to send comment.");
+      }
+    } catch(e) {
+      alert("Error sending comment.");
+    }
+  }
+  window.sendAdminComment = sendAdminComment;
+
+  function renderAdminPanel() {
+    var html = '<div class="header-row">';
+    html += '<div class="brand-row"><span class="brand-text">Admin Panel</span></div>';
+    html += '<div class="top-actions">';
+    html += '<button class="btn-ghost" onclick="backToMain()">Back to App</button>';
+    html += '</div></div>';
+
+    if (ui.adminLoading) {
+      html += '<div style="text-align:center; padding: 40px;" class="muted">Loading users list...</div>';
+      return html;
+    }
+
+    html += '<div class="row" style="margin-top: 16px;">';
+    html += '<h2 style="font-size: 20px; font-weight: bold; color: var(--text);">Registered Users (' + ui.adminUsers.length + ')</h2>';
+    html += '</div>';
+
+    if (!ui.adminUsers.length) {
+      html += '<div class="card" style="padding: 20px; text-align:center;" class="muted">No registered users found.</div>';
+      return html;
+    }
+
+    html += '<div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">';
+    ui.adminUsers.forEach(function(user) {
+      var isSelected = ui.adminSelectedUser && ui.adminSelectedUser.pathname === user.pathname;
+      var labelName = user.fullName || "Unnamed User";
+      html += '<div class="card" style="padding: 12px; cursor: pointer; border: ' + (isSelected ? '1px solid var(--accent)' : '1px solid var(--line)') + '" onclick="selectAdminUser(\'' + user.pathname + '\')">';
+      html += '<div style="display:flex; justify-content: space-between; align-items: center;">';
+      html += '<div>';
+      html += '<div style="font-weight: 600; color: var(--text);">' + esc(labelName) + '</div>';
+      html += '<div class="muted" style="font-size: 12px;">' + esc(user.identifier) + ' (' + esc(user.identifierType) + ')</div>';
+      html += '</div>';
+      html += '<span class="muted">' + (isSelected ? "▲" : "▼") + '</span>';
+      html += '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+
+    if (ui.adminSelectedUser) {
+      var selUser = ui.adminSelectedUser;
+      var nameLabel = selUser.fullName || "Unnamed User";
+      html += '<div style="margin-top: 24px; border-top: 2px solid var(--line); padding-top: 16px;">';
+      html += '<h3 style="font-size: 18px; font-weight: bold; color: var(--text); margin-bottom: 12px;">Workout logs for: ' + esc(nameLabel) + '</h3>';
+
+      var userLogs = (selUser.data && selUser.data.logs) || {};
+      var dates = Object.keys(userLogs).sort(function(a,b){ return b.localeCompare(a); });
+
+      if (!dates.length) {
+        html += '<div class="card" style="padding: 20px; text-align: center;" class="muted">This user has no logged workouts yet.</div>';
+      } else {
+        dates.forEach(function(dt) {
+          html += '<div class="card" style="padding: 14px; margin-bottom: 12px;">';
+          html += '<div style="font-weight: bold; margin-bottom: 10px; color: var(--accent);">' + esc(dt) + '</div>';
+          
+          var entries = userLogs[dt].entries || {};
+          var entriesKeys = Object.keys(entries);
+          
+          if (!entriesKeys.length) {
+            html += '<div class="muted">No exercises entered.</div>';
+          } else {
+            entriesKeys.forEach(function(exId) {
+              var exName = exId;
+              if (selUser.data.split && selUser.data.split.days) {
+                selUser.data.split.days.forEach(function(d){
+                  var matching = d.exercises.find(function(ex){ return ex.id === exId; });
+                  if (matching) exName = matching.name;
+                });
+              }
+              
+              var sets = Array.isArray(entries[exId]) ? entries[exId] : (entries[exId].sets || []);
+              html += '<div style="margin-top: 8px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">';
+              html += '<div style="font-weight: 600; color: var(--text);">' + esc(exName) + '</div>';
+              
+              var exUnit = (selUser.data.exerciseUnits && selUser.data.exerciseUnits[exId]) || selUser.data.unit || "kg";
+              
+              html += '<table style="width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 13px;">';
+              html += '<thead><tr style="text-align:left; border-bottom: 1px solid var(--line);"><th style="padding: 4px;">Set</th><th style="padding: 4px;">Reps</th><th style="padding: 4px;">Weight (' + exUnit + ')</th></tr></thead>';
+              html += '<tbody>';
+              sets.forEach(function(s, idx) {
+                html += '<tr>';
+                html += '<td style="padding: 4px;">' + (idx+1) + '</td>';
+                html += '<td style="padding: 4px;">' + esc(s.reps) + '</td>';
+                html += '<td style="padding: 4px;">' + esc(s.weight) + '</td>';
+                html += '</tr>';
+              });
+              html += '</tbody></table>';
+
+              var existingComment = (selUser.data.adminComments && selUser.data.adminComments[exId]) ? selUser.data.adminComments[exId].text : "";
+              html += '<div style="margin-top: 10px; display:flex; flex-direction:column; gap: 6px;">';
+              html += '<input type="text" id="admin-comment-input-' + exId + '" value="' + esc(existingComment) + '" placeholder="Leave a comment on this exercise..." style="width: 100%; padding: 6px; font-size: 13px;" />';
+              html += '<div style="display:flex; align-items:center; gap:8px;">';
+              html += '<button class="btn-primary" style="padding: 4px 10px; font-size: 12px;" onclick="sendAdminComment(\'' + selUser.pathname + '\', \'' + exId + '\')">Send Comment</button>';
+              if (existingComment && existingComment.trim()) {
+                html += '<button class="btn-ghost" style="padding: 4px 10px; font-size: 12px; color: var(--accent);" onclick="sendAdminComment(\'' + selUser.pathname + '\', \'' + exId + '\', \'\')">Delete Comment</button>';
+              }
+              html += '</div>';
+              html += '</div>';
+
+              html += '</div>';
+            });
+          }
+          html += '</div>';
+        });
+      }
+      html += '</div>';
+    }
+
+    return html;
+  }
+  window.renderAdminPanel = renderAdminPanel;
+
+
   // Some networks don't cleanly refuse the connection to vercel.app - they silently
   // drop the packets, so fetch() never rejects and never resolves. Without a timeout
   // that hangs forever and the fallback below never gets a chance to run. Force a
@@ -2317,238 +2558,6 @@
     render();
 
 
-  window.selectProfileAvatar = function(id) {
-    ui.tempProfileAvatar = id;
-    render();
-  };
-
-  window.submitProfileUpdate = async function() {
-    var nameInput = document.getElementById("profile-fullname");
-    var nextName = nameInput ? nameInput.value.trim().replace(/\s+/g, " ") : "";
-    var nextAvatar = ui.tempProfileAvatar || (data && data.avatar) || "chest";
-
-    if (!nextName) {
-      ui.profileError = "Name cannot be empty.";
-      render();
-      return;
-    }
-
-    ui.profileBusy = true;
-    ui.profileError = null;
-    ui.profileSuccess = false;
-    render();
-
-    try {
-      data = data || {};
-      data.avatar = nextAvatar;
-      persist(data);
-
-      var res = await apiFetch("/api/profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + authToken },
-        body: JSON.stringify({ fullName: nextName })
-      });
-
-      if (res.ok) {
-        displayName = nextName;
-        try { localStorage.setItem(DISPLAY_NAME_KEY, displayName); } catch(e){}
-        ui.profileSuccess = true;
-      } else {
-        ui.profileError = "Failed to update profile name on server.";
-      }
-    } catch(e) {
-      ui.profileError = "Connection error.";
-    }
-
-    ui.profileBusy = false;
-    render();
-  };
-
-  window.selectSignupAvatar = function(id) {
-    ui.selectedAvatar = id;
-    render();
-  };
-
-
-  window.getExerciseUnit = function(exId) {
-    if (!data.exerciseUnits) data.exerciseUnits = {};
-    return data.exerciseUnits[exId] || data.unit || "kg";
-  };
-
-  window.toggleExerciseUnit = function(exId) {
-    if (!data.exerciseUnits) data.exerciseUnits = {};
-    var current = getExerciseUnit(exId);
-    data.exerciseUnits[exId] = current === "kg" ? "lbs" : "kg";
-    persist(data);
-  };
-
-  window.showAdminPanel = async function(){
-    ui.stage = "admin";
-    ui.adminLoading = true;
-    ui.adminUsers = [];
-    ui.adminSelectedUser = null;
-    render();
-    try {
-      var res = await apiFetch("/api/admin", {
-        headers: { "Authorization": "Bearer " + authToken }
-      });
-      if (res.ok) {
-        var body = await res.json();
-        ui.adminUsers = body.users || [];
-      }
-    } catch(e) {}
-    ui.adminLoading = false;
-    render();
-  };
-
-  window.selectAdminUser = function(userPathname) {
-    var user = ui.adminUsers.find(function(u){ return u.pathname === userPathname; });
-    ui.adminSelectedUser = user || null;
-    render();
-  };
-
-  window.sendAdminComment = async function(userPathname, exId, textOverride) {
-    var input = document.getElementById("admin-comment-input-" + exId);
-    var text = textOverride !== undefined ? textOverride : (input ? input.value : "");
-    try {
-      var res = await apiFetch("/api/admin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + authToken },
-        body: JSON.stringify({
-          userPathname: userPathname,
-          exerciseId: exId,
-          commentText: text
-        })
-      });
-      if (res.ok) {
-        var selectedUser = ui.adminUsers.find(function(u){ return u.pathname === userPathname; });
-        if (selectedUser) {
-          if (!selectedUser.data.adminComments) selectedUser.data.adminComments = {};
-          selectedUser.data.adminComments[exId] = { text: text, timestamp: new Date().toISOString() };
-        }
-        alert(text === "" ? "Comment deleted successfully!" : "Comment sent successfully!");
-        render();
-      } else {
-        alert("Failed to send comment.");
-      }
-    } catch(e) {
-      alert("Error sending comment.");
-    }
-  };
-
-  window.renderAdminPanel = function() {
-    var html = '<div class="header-row">';
-    html += '<div class="brand-row"><span class="brand-text">Admin Panel</span></div>';
-    html += '<div class="top-actions">';
-    html += '<button class="btn-ghost" onclick="backToMain()">Back to App</button>';
-    html += '</div></div>';
-
-    if (ui.adminLoading) {
-      html += '<div style="text-align:center; padding: 40px;" class="muted">Loading users list...</div>';
-      return html;
-    }
-
-    html += '<div class="row" style="margin-top: 16px;">';
-    html += '<h2 style="font-size: 20px; font-weight: bold; color: var(--text);">Registered Users (' + ui.adminUsers.length + ')</h2>';
-    html += '</div>';
-
-    if (!ui.adminUsers.length) {
-      html += '<div class="card" style="padding: 20px; text-align:center;" class="muted">No registered users found.</div>';
-      return html;
-    }
-
-    // List of Users
-    html += '<div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">';
-    ui.adminUsers.forEach(function(user) {
-      var isSelected = ui.adminSelectedUser && ui.adminSelectedUser.pathname === user.pathname;
-      var labelName = user.fullName || "Unnamed User";
-      html += '<div class="card" style="padding: 12px; cursor: pointer; border: ' + (isSelected ? '1px solid var(--accent)' : '1px solid var(--line)') + '" onclick="selectAdminUser(\'' + user.pathname + '\')">';
-      html += '<div style="display:flex; justify-content: space-between; align-items: center;">';
-      html += '<div>';
-      html += '<div style="font-weight: 600; color: var(--text);">' + esc(labelName) + '</div>';
-      html += '<div class="muted" style="font-size: 12px;">' + esc(user.identifier) + ' (' + esc(user.identifierType) + ')</div>';
-      html += '</div>';
-      html += '<span class="muted">' + (isSelected ? "▲" : "▼") + '</span>';
-      html += '</div>';
-      html += '</div>';
-    });
-    html += '</div>';
-
-    // Inspected User details
-    if (ui.adminSelectedUser) {
-      var selUser = ui.adminSelectedUser;
-      var nameLabel = selUser.fullName || "Unnamed User";
-      html += '<div style="margin-top: 24px; border-top: 2px solid var(--line); padding-top: 16px;">';
-      html += '<h3 style="font-size: 18px; font-weight: bold; color: var(--text); margin-bottom: 12px;">Workout logs for: ' + esc(nameLabel) + '</h3>';
-
-      var userLogs = (selUser.data && selUser.data.logs) || {};
-      var dates = Object.keys(userLogs).sort(function(a,b){ return b.localeCompare(a); }); // newest first
-
-      if (!dates.length) {
-        html += '<div class="card" style="padding: 20px; text-align: center;" class="muted">This user has no logged workouts yet.</div>';
-      } else {
-        dates.forEach(function(dt) {
-          html += '<div class="card" style="padding: 14px; margin-bottom: 12px;">';
-          html += '<div style="font-weight: bold; margin-bottom: 10px; color: var(--accent);">' + esc(dt) + '</div>';
-          
-          var entries = userLogs[dt].entries || {};
-          var entriesKeys = Object.keys(entries);
-          
-          if (!entriesKeys.length) {
-            html += '<div class="muted">No exercises entered.</div>';
-          } else {
-            entriesKeys.forEach(function(exId) {
-              // Find exercise name in split config if possible, fallback to exId
-              var exName = exId;
-              if (selUser.data.split && selUser.data.split.days) {
-                selUser.data.split.days.forEach(function(d){
-                  var matching = d.exercises.find(function(ex){ return ex.id === exId; });
-                  if (matching) exName = matching.name;
-                });
-              }
-              
-              var sets = Array.isArray(entries[exId]) ? entries[exId] : (entries[exId].sets || []);
-              html += '<div style="margin-top: 8px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">';
-              html += '<div style="font-weight: 600; color: var(--text);">' + esc(exName) + '</div>';
-              
-              // Render weight units
-              var exUnit = (selUser.data.exerciseUnits && selUser.data.exerciseUnits[exId]) || selUser.data.unit || "kg";
-              
-              html += '<table style="width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 13px;">';
-              html += '<thead><tr style="text-align:left; border-bottom: 1px solid var(--line);"><th style="padding: 4px;">Set</th><th style="padding: 4px;">Reps</th><th style="padding: 4px;">Weight (' + exUnit + ')</th></tr></thead>';
-              html += '<tbody>';
-              sets.forEach(function(s, idx) {
-                html += '<tr>';
-                html += '<td style="padding: 4px;">' + (idx+1) + '</td>';
-                html += '<td style="padding: 4px;">' + esc(s.reps) + '</td>';
-                html += '<td style="padding: 4px;">' + esc(s.weight) + '</td>';
-                html += '</tr>';
-              });
-              html += '</tbody></table>';
-
-              // Admin Comment Box
-              var existingComment = (selUser.data.adminComments && selUser.data.adminComments[exId]) ? selUser.data.adminComments[exId].text : "";
-              html += '<div style="margin-top: 10px; display:flex; flex-direction:column; gap: 6px;">';
-              html += '<input type="text" id="admin-comment-input-' + exId + '" value="' + esc(existingComment) + '" placeholder="Leave a comment on this exercise..." style="width: 100%; padding: 6px; font-size: 13px;" />';
-              html += '<div style="display:flex; align-items:center; gap:8px;">';
-              html += '<button class="btn-primary" style="padding: 4px 10px; font-size: 12px;" onclick="sendAdminComment(\'' + selUser.pathname + '\', \'' + exId + '\')">Send Comment</button>';
-              if (existingComment && existingComment.trim()) {
-                html += '<button class="btn-ghost" style="padding: 4px 10px; font-size: 12px; color: var(--accent);" onclick="sendAdminComment(\'' + selUser.pathname + '\', \'' + exId + '\', \'\')">Delete Comment</button>';
-              }
-              html += '</div>';
-              html += '</div>';
-
-              html += '</div>';
-            });
-          }
-          html += '</div>';
-        });
-      }
-      html += '</div>';
-    }
-
-    return html;
-  }
   })();
 })();
 </script>
