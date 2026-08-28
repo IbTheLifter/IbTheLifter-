@@ -806,11 +806,6 @@
       }
       if (body.fullName !== undefined && body.fullName !== null) {
         displayName = body.fullName || "";
-      if (ui.authMode === "signup" && ui.selectedAvatar) {
-        data = data || {};
-        data.avatar = ui.selectedAvatar;
-        persist(data);
-      }
         try { localStorage.setItem(DISPLAY_NAME_KEY, displayName); } catch(e){}
       }
       return { data: body.data, etag: body.etag };
@@ -1040,6 +1035,11 @@
       // typed value, falling back to it only if an older API response omitted it.
       identity = { type: body.identifierType || identifierType, value: body.identifier || identifier };
       displayName = body.fullName || "";
+      if (ui.authMode === "signup" && ui.selectedAvatar) {
+        data = data || {};
+        data.avatar = ui.selectedAvatar;
+        persist(data);
+      }
       try {
         localStorage.setItem(TOKEN_KEY, authToken);
         localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity));
@@ -2047,6 +2047,50 @@
     html += '<div class="muted" style="margin-top:6px;">' + (identity && identity.type === "phone" ? T("accountTypePhone") : T("accountTypeEmail")) + '</div>';
     html += '</div>';
 
+    // Edit Profile form
+    html += '<div style="margin-top:20px; margin-bottom: 24px;">';
+    html += '<div class="sub" style="font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;">Edit Profile</div>';
+    var currentName = displayName || "";
+    html += '<div style="margin-bottom:12px;">';
+    html += '<label class="muted" style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Full Name</label>';
+    html += '<input id="profile-fullname" type="text" value="' + esc(currentName) + '" placeholder="Enter your full name" style="width:100%;" />';
+    html += '</div>';
+
+    html += '<div style="margin-bottom:16px;">';
+    html += '<label class="muted" style="font-size:12px;font-weight:600;display:block;margin-bottom:6px;">Profile Avatar Theme</label>';
+    html += '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;" id="profile-avatar-grid">';
+    
+    var avatars = [
+      { id: "chest", label: "Chest (Red)", color: "#ff4a4a" },
+      { id: "back", label: "Back (Blue)", color: "#4a90e2" },
+      { id: "shoulders", label: "Shoulders (Green)", color: "#4caf50" },
+      { id: "legs", label: "Legs (Red)", color: "#ff4a4a" },
+      { id: "biceps", label: "Biceps (Orange)", color: "#ff9800" },
+      { id: "triceps", label: "Triceps (Yellow)", color: "#ffeb3b" }
+    ];
+    
+    var selectedAv = (data && data.avatar) || "chest";
+    if (ui.tempProfileAvatar) selectedAv = ui.tempProfileAvatar;
+
+    avatars.forEach(function(av) {
+      var isSel = selectedAv === av.id;
+      html += '<div onclick="selectProfileAvatar(\'' + av.id + '\')" style="cursor: pointer; border: 2px solid ' + (isSel ? 'var(--accent)' : 'var(--line)') + '; border-radius: 8px; padding: 8px; text-align: center; background: var(--surface-raised);">';
+      html += '<div style="width: 32px; height: 32px; border-radius: 50%; background: ' + av.color + '; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: bold; font-size: 12px;">' + av.label[0] + '</div>';
+      html += '<div style="font-size: 11px; font-weight: bold; color: var(--text);">' + av.label.split(" ")[0] + '</div>';
+      html += '</div>';
+    });
+    html += '</div></div>';
+
+    if (ui.profileError){
+      html += '<div style="color:var(--danger);font-size:12px;margin-bottom:10px;">' + esc(ui.profileError) + '</div>';
+    }
+    if (ui.profileSuccess){
+      html += '<div style="color:var(--accent);font-size:12px;margin-bottom:10px;">Profile updated successfully!</div>';
+    }
+
+    html += '<button class="btn-primary" style="width:100%;" ' + (ui.profileBusy ? "disabled" : "") + ' onclick="submitProfileUpdate()">' + (ui.profileBusy ? T("syncing") : "Save Profile") + '</button>';
+    html += '</div>';
+
     html += '<div style="margin-top:20px;">';
     html += '<div class="sub" style="font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;">' + T("changePasswordBtn") + '</div>';
     html += '<div style="margin-bottom:10px;">' + passwordFieldHtml("pw-current", T("currentPasswordPlaceholder"), "current-password") + '</div>';
@@ -2209,6 +2253,53 @@
     }
     render();
 
+
+  window.selectProfileAvatar = function(id) {
+    ui.tempProfileAvatar = id;
+    render();
+  };
+
+  window.submitProfileUpdate = async function() {
+    var nameInput = document.getElementById("profile-fullname");
+    var nextName = nameInput ? nameInput.value.trim().replace(/\s+/g, " ") : "";
+    var nextAvatar = ui.tempProfileAvatar || (data && data.avatar) || "chest";
+
+    if (!nextName) {
+      ui.profileError = "Name cannot be empty.";
+      render();
+      return;
+    }
+
+    ui.profileBusy = true;
+    ui.profileError = null;
+    ui.profileSuccess = false;
+    render();
+
+    try {
+      data = data || {};
+      data.avatar = nextAvatar;
+      persist(data);
+
+      var res = await apiFetch("/api/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + authToken },
+        body: JSON.stringify({ fullName: nextName })
+      });
+
+      if (res.ok) {
+        displayName = nextName;
+        try { localStorage.setItem(DISPLAY_NAME_KEY, displayName); } catch(e){}
+        ui.profileSuccess = true;
+      } else {
+        ui.profileError = "Failed to update profile name on server.";
+      }
+    } catch(e) {
+      ui.profileError = "Connection error.";
+    }
+
+    ui.profileBusy = false;
+    render();
+  };
 
   window.selectSignupAvatar = function(id) {
     ui.selectedAvatar = id;
