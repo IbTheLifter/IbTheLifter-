@@ -244,6 +244,69 @@
   var API_FALLBACK_BASE = "https://ibthelifter-proxy-a91k7q.ibraheemqasem03.workers.dev";
   var app = document.getElementById("app");
 
+  function renderAvatarSvg(avatarId, color) {
+    var svg = '<svg viewBox="0 0 100 100" style="width:100%; height:100%; display:block;">';
+    // Background circle
+    svg += '<circle cx="50" cy="50" r="48" fill="' + color + '" />';
+    
+    // Standardized smiley face on the muscle
+    var smile = '<circle cx="45" cy="45" r="4" fill="#111" /><circle cx="55" cy="45" r="4" fill="#111" /><path d="M 43 55 Q 50 62 57 55" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
+
+    if (avatarId === "chest") {
+      // PECS MASCOT: Cute pec shapes flexing with stick arms
+      svg += '<path d="M 25 40 Q 37 25 50 40 Q 63 25 75 40 Q 75 65 50 82 Q 25 65 25 40 Z" fill="#fff" opacity="0.95" />';
+      svg += '<path d="M 50 40 L 50 82" stroke="' + color + '" stroke-width="3" />';
+      // Stick arms waving
+      svg += '<path d="M 25 50 Q 15 45 10 50" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
+      svg += '<path d="M 75 50 Q 85 45 90 50" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
+      svg += smile;
+    } else if (avatarId === "back") {
+      // BACK MASCOT: V-taper back with flexing stick arms
+      svg += '<path d="M 22 28 L 78 28 L 68 72 L 50 85 L 32 72 Z" fill="#fff" opacity="0.95" />';
+      svg += '<path d="M 35 28 Q 50 60 50 85 Q 50 60 65 28" fill="none" stroke="' + color + '" stroke-width="3" />';
+      // Flexing stick arms
+      svg += '<path d="M 22 35 Q 12 30 15 20 Q 20 20 22 28" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
+      svg += '<path d="M 78 35 Q 88 30 85 20 Q 80 20 78 28" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
+      svg += smile;
+    } else if (avatarId === "shoulders") {
+      // SHOULDERS MASCOT: Round shoulder cap muscle with waving hands
+      svg += '<circle cx="50" cy="50" r="30" fill="#fff" opacity="0.95" />';
+      svg += '<path d="M 30 50 L 70 50" stroke="' + color + '" stroke-width="3" />';
+      // Stick arms
+      svg += '<path d="M 20 50 Q 10 40 8 48" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
+      svg += '<path d="M 80 50 Q 90 40 92 48" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
+      svg += smile;
+    } else if (avatarId === "legs") {
+      // LEGS MASCOT: Leg muscle with standing stick feet (Matching the red leg mascot vibe!)
+      svg += '<path d="M 32 25 L 68 25 L 62 75 L 50 85 L 38 75 Z" fill="#fff" opacity="0.95" />';
+      svg += '<path d="M 50 25 L 50 85" stroke="' + color + '" stroke-width="3" />';
+      // Tiny stick legs standing
+      svg += '<path d="M 42 80 L 42 92 L 36 92" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
+      svg += '<path d="M 58 80 L 58 92 L 64 92" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
+      svg += smile;
+    } else if (avatarId === "biceps") {
+      // BICEPS MASCOT: Flexing bicep shape with flexing fist
+      svg += '<path d="M 25 55 C 25 35, 45 25, 60 40 C 72 30, 85 45, 75 65 C 65 78, 45 80, 25 55 Z" fill="#fff" opacity="0.95" />';
+      svg += '<path d="M 40 50 C 48 40, 58 40, 62 50" fill="none" stroke="' + color + '" stroke-width="3" />';
+      // Stick fist flexing
+      svg += '<path d="M 25 55 Q 15 50 18 42" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
+      svg += smile;
+    } else if (avatarId === "triceps") {
+      // TRICEPS MASCOT: Tricep muscle with tiny feet and arms
+      svg += '<path d="M 28 32 C 40 18, 60 18, 72 32 C 80 50, 72 76, 50 85 C 28 76, 20 50, 28 32 Z" fill="#fff" opacity="0.95" />';
+      svg += '<path d="M 50 18 L 50 85" stroke="' + color + '" stroke-width="3" />';
+      // Stick arms
+      svg += '<path d="M 24 45 L 14 55" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
+      svg += '<path d="M 76 45 L 86 55" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
+      svg += smile;
+    } else {
+      svg += smile;
+    }
+    
+    svg += '</svg>';
+    return svg;
+  }
+
   // Some networks don't cleanly refuse the connection to vercel.app - they silently
   // drop the packets, so fetch() never rejects and never resolves. Without a timeout
   // that hangs forever and the fallback below never gets a chance to run. Force a
@@ -2306,68 +2369,7 @@
     render();
   };
 
-  function renderAvatarSvg(avatarId, color) {
-    var svg = '<svg viewBox="0 0 100 100" style="width:100%; height:100%; display:block;">';
-    // Background circle
-    svg += '<circle cx="50" cy="50" r="48" fill="' + color + '" />';
-    
-    // Standardized smiley face on the muscle
-    var smile = '<circle cx="45" cy="45" r="4" fill="#111" /><circle cx="55" cy="45" r="4" fill="#111" /><path d="M 43 55 Q 50 62 57 55" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
 
-    if (avatarId === "chest") {
-      // PECS MASCOT: Cute pec shapes flexing with stick arms
-      svg += '<path d="M 25 40 Q 37 25 50 40 Q 63 25 75 40 Q 75 65 50 82 Q 25 65 25 40 Z" fill="#fff" opacity="0.95" />';
-      svg += '<path d="M 50 40 L 50 82" stroke="' + color + '" stroke-width="3" />';
-      // Stick arms waving
-      svg += '<path d="M 25 50 Q 15 45 10 50" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
-      svg += '<path d="M 75 50 Q 85 45 90 50" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
-      svg += smile;
-    } else if (avatarId === "back") {
-      // BACK MASCOT: V-taper back with flexing stick arms
-      svg += '<path d="M 22 28 L 78 28 L 68 72 L 50 85 L 32 72 Z" fill="#fff" opacity="0.95" />';
-      svg += '<path d="M 35 28 Q 50 60 50 85 Q 50 60 65 28" fill="none" stroke="' + color + '" stroke-width="3" />';
-      // Flexing stick arms
-      svg += '<path d="M 22 35 Q 12 30 15 20 Q 20 20 22 28" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
-      svg += '<path d="M 78 35 Q 88 30 85 20 Q 80 20 78 28" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
-      svg += smile;
-    } else if (avatarId === "shoulders") {
-      // SHOULDERS MASCOT: Round shoulder cap muscle with waving hands
-      svg += '<circle cx="50" cy="50" r="30" fill="#fff" opacity="0.95" />';
-      svg += '<path d="M 30 50 L 70 50" stroke="' + color + '" stroke-width="3" />';
-      // Stick arms
-      svg += '<path d="M 20 50 Q 10 40 8 48" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
-      svg += '<path d="M 80 50 Q 90 40 92 48" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
-      svg += smile;
-    } else if (avatarId === "legs") {
-      // LEGS MASCOT: Leg muscle with standing stick feet (Matching the red leg mascot vibe!)
-      svg += '<path d="M 32 25 L 68 25 L 62 75 L 50 85 L 38 75 Z" fill="#fff" opacity="0.95" />';
-      svg += '<path d="M 50 25 L 50 85" stroke="' + color + '" stroke-width="3" />';
-      // Tiny stick legs standing
-      svg += '<path d="M 42 80 L 42 92 L 36 92" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
-      svg += '<path d="M 58 80 L 58 92 L 64 92" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
-      svg += smile;
-    } else if (avatarId === "biceps") {
-      // BICEPS MASCOT: Flexing bicep shape with flexing fist
-      svg += '<path d="M 25 55 C 25 35, 45 25, 60 40 C 72 30, 85 45, 75 65 C 65 78, 45 80, 25 55 Z" fill="#fff" opacity="0.95" />';
-      svg += '<path d="M 40 50 C 48 40, 58 40, 62 50" fill="none" stroke="' + color + '" stroke-width="3" />';
-      // Stick fist flexing
-      svg += '<path d="M 25 55 Q 15 50 18 42" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
-      svg += smile;
-    } else if (avatarId === "triceps") {
-      // TRICEPS MASCOT: Tricep muscle with tiny feet and arms
-      svg += '<path d="M 28 32 C 40 18, 60 18, 72 32 C 80 50, 72 76, 50 85 C 28 76, 20 50, 28 32 Z" fill="#fff" opacity="0.95" />';
-      svg += '<path d="M 50 18 L 50 85" stroke="' + color + '" stroke-width="3" />';
-      // Stick arms
-      svg += '<path d="M 24 45 L 14 55" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
-      svg += '<path d="M 76 45 L 86 55" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" />';
-      svg += smile;
-    } else {
-      svg += smile;
-    }
-    
-    svg += '</svg>';
-    return svg;
-  }
   window.getExerciseUnit = function(exId) {
     if (!data.exerciseUnits) data.exerciseUnits = {};
     return data.exerciseUnits[exId] || data.unit || "kg";
